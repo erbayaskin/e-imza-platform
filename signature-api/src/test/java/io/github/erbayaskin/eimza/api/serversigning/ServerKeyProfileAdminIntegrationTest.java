@@ -2,6 +2,7 @@ package io.github.erbayaskin.eimza.api.serversigning;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -25,7 +26,7 @@ class ServerKeyProfileAdminIntegrationTest {
         var created = adminService.create(new CreateServerKeyProfileRequest(
                 "Sunucu AKİS kartı",
                 ServerDeviceType.SMART_CARD,
-                "C:/Windows/System32/akisp11.dll",
+                absoluteLibraryPath("akisp11.dll"),
                 null,
                 "3B9F978131FE4580655443D3228231C073F621808105D3",
                 "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
@@ -41,5 +42,12 @@ class ServerKeyProfileAdminIntegrationTest {
         assertThat(selected.pkcs11Library().toString())
                 .containsIgnoringCase("akisp11.dll");
         assertThat(selected.allowedTenantIds()).containsExactly(TENANT);
+    }
+
+    private static String absoluteLibraryPath(String fileName) {
+        return Path.of(System.getProperty("java.io.tmpdir"), "eimza", "test-drivers", fileName)
+                .toAbsolutePath()
+                .normalize()
+                .toString();
     }
 }
