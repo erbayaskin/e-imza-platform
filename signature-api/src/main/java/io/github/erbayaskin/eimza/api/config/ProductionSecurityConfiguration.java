@@ -14,7 +14,7 @@ public class ProductionSecurityConfiguration {
 
     @Bean
     SecurityFilterChain productionSecurityFilterChain(HttpSecurity http) throws Exception {
-        return http.csrf(csrf -> csrf.disable())
+        return http.csrf(csrf -> csrf.ignoringRequestMatchers("/api/**", "/actuator/**"))
                 .sessionManagement(
                         sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .headers(headers -> headers
