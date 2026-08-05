@@ -1,0 +1,20 @@
+# Default owner
+* @erbayaskin
+
+# Security, release and repository governance
+/.github/ @erbayaskin
+/SECURITY.md @erbayaskin
+/CODE_OF_CONDUCT.md @erbayaskin
+/GOVERNANCE.md @erbayaskin
+/LICENSE @erbayaskin
+/NOTICE @erbayaskin
+/pom.xml @erbayaskin
+
+# Cryptographic and trust-sensitive modules
+/signature-core/ @erbayaskin
+/signature-cades/ @erbayaskin
+/signature-xades/ @erbayaskin
+/signature-pades/ @erbayaskin
+/certificate-validation/ @erbayaskin
+/timestamp-client/ @erbayaskin
+/smartcard-agent/ @erbayaskin

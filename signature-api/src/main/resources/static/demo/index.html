@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>E-İmza Uçtan Uca Test İstemcisi</title>
+  <style>
+    body{font:16px system-ui;max-width:850px;margin:40px auto;padding:0 20px;color:#17202a;background:#f7f9fb}
+    h1{margin-bottom:6px}.step{background:white;border:1px solid #dce3e9;border-radius:10px;padding:18px;margin:18px 0}
+    .step h2{font-size:18px;margin:0 0 12px}.notice{background:#fff8df;border-left:4px solid #e0a800;padding:12px;margin:12px 0}
+    .status{background:#eef6ff;border-left:4px solid #1976d2;padding:12px;margin-top:12px}
+    label{display:block;margin:14px 0 5px;font-weight:600}input,select,button{font:inherit;padding:9px}
+    input,select{width:100%;box-sizing:border-box}button{margin:16px 8px 0 0;cursor:pointer}
+    button:disabled,select:disabled{cursor:not-allowed;opacity:.55}
+    .hidden{display:none}
+    .validation-result{border-radius:8px;padding:14px;margin-top:14px}.VALID{background:#e8f6ec;border-left:5px solid #249246}.INVALID{background:#fdecec;border-left:5px solid #c62828}.INDETERMINATE{background:#fff8df;border-left:5px solid #d39a00}
+    .checks{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}.checks th,.checks td{border-bottom:1px solid #dce3e9;text-align:left;padding:8px;vertical-align:top}
+    pre{background:#17202a;color:#eaf2f8;padding:14px;white-space:pre-wrap;min-height:80px;border-radius:8px}
+  </style>
+</head>
+<body>
+<h1>E-İmza test istemcisi</h1>
+<p>Merkez API ile yerel kart ajanı arasındaki uçtan uca imzalama akışını yürütür.</p>
+<p><a href="/multi-signature/">Paralel / seri imza sayfas?n? a?</a> ? <a href="/validation/">?mza do?rulama sayfas?n? a?</a> ? <a href="/admin/">Y?netim ve tan?mlama ekran?n? a?</a></p>
+<div class="notice"><strong>PIN güvenliği:</strong> Client-side akışta PIN tarayıcıya veya merkez API'ye aktarılmaz; yalnız yerel agent penceresine girilir. Server-side akıllı kartta PIN bu ekrandan tek kullanımlık olarak API'ye gönderilir ve saklanmaz. HSM PIN'i ekrana girilmez; sunucudaki credential reference üzerinden alınır.</div>
+
+<section class="step">
+ <h2>1. Test kimlikleri</h2>
+ <label>Tenant UUID</label><input id="tenant" value="11111111-1111-1111-1111-111111111111">
+ <label>İmzalama modu</label><select id="mode"><option value="CLIENT_SIDE">Client-side akıllı kart</option><option value="SERVER_SIDE">Server-side HSM / akıllı kart</option></select>
+ <div id="clientIdentity">
+  <label>Cihaz UUID</label><input id="device" value="a8a0dc09-54ab-40b7-b404-bebd55ff1756">
+  <button id="registerDevice">Yerel ajan cihaz anahtarını kaydet</button>
+ </div>
+ <div id="serverIdentity" class="hidden">
+  <label>Server-side anahtar profili</label><select id="serverKeyId"><option value="">Profilleri yükleyin</option></select>
+  <button id="loadServerKeys">Server key profillerini yükle</button>
+  <label>Sunucu akıllı kart PIN'i</label><input id="serverPin" type="password" autocomplete="off" placeholder="HSM için boş bırakılır; akıllı kart için tek kullanımlıktır">
+ </div>
+</section>
+
+<section id="clientCardStep" class="step">
+ <h2>2. Kart ve imza sertifikası</h2>
+ <button id="discover">Kartı tara ve public sertifikaları yükle</button>
+ <label>Kart/okuyucu</label><select id="card" disabled><option>Önce kartı tara</option></select>
+ <label>İmza sertifikası</label><select id="certificate" disabled><option>Önce sertifikaları yükle</option></select>
+ <div id="pinStatus" class="status">Yerel PIN işlemi henüz başlatılmadı.</div>
+</section>
+
+<section class="step">
+ <h2>3. Belgeyi imzala</h2>
+ <label>Dosya</label><input id="file" type="file">
+ <label>Format</label><select id="format"><option>CADES</option><option>XADES</option><option>PADES</option></select>
+ <label>İmza paketleme türü</label><select id="packaging"></select>
+ <label>İmza algoritması</label><select id="signatureAlgorithm">
+  <option>RSA_PKCS1_SHA256</option><option>RSA_PKCS1_SHA384</option><option>RSA_PKCS1_SHA512</option>
+  <option>ECDSA_SHA256</option><option>ECDSA_SHA384</option><option>ECDSA_SHA512</option>
+ </select>
+ <label>Seviye</label><select id="level"><option>B_B</option><option>B_T</option></select>
+ <button id="sign" disabled>Seçili sertifika ile imzala (PIN penceresi açılır)</button>
+</section>
+
+<label>İşlem sonucu</label><pre id="log">Hazır.</pre>
+<script>
+const api='/api/v1', agent='http://127.0.0.1:18443/agent/v1';
+const log=x=>document.querySelector('#log').textContent=typeof x==='string'?x:JSON.stringify(x,null,2);
+const pin=x=>document.querySelector('#pinStatus').textContent=x;
+const b64=bytes=>{let s=''; for(let i=0;i<bytes.length;i+=32768)s+=String.fromCharCode(...bytes.slice(i,i+32768));return btoa(s)};
+const b64url=bytes=>b64(bytes).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
+const headers=()=>({'Content-Type':'application/json','X-Tenant-Id':tenant.value});
+async function json(url,options={}){const r=await fetch(url,options);const x=await r.json();if(!r.ok)throw new Error(JSON.stringify(x));return x}
+const packagingByFormat={
+ CADES:['DETACHED','ATTACHED'],
+ XADES:['DETACHED','ENVELOPED','ENVELOPING'],
+ PADES:['ENVELOPED']
+};
+function updatePackaging(){
+ const values=packagingByFormat[format.value];
+ const previous=packaging.value;
+ packaging.innerHTML=values.map(x=>`<option>${x}</option>`).join('');
+ if(values.includes(previous))packaging.value=previous;
+ packaging.disabled=values.length===1;
+ if(format.value==='PADES')signatureAlgorithm.value=signatureAlgorithm.value.startsWith('ECDSA_')?'ECDSA_SHA256':'RSA_PKCS1_SHA256';
+}
+function updateAlgorithms(){
+ const client=mode.value==='CLIENT_SIDE';
+ const cert=certificate._items?.[Number(certificate.value)];
+ const prefix=client&&cert?(cert.publicKeyAlgorithm==='EC'?'ECDSA_':'RSA_PKCS1_'):null;
+ [...signatureAlgorithm.options].forEach(x=>x.hidden=prefix?!x.value.startsWith(prefix):false);
+ if(prefix&&!signatureAlgorithm.value.startsWith(prefix)){
+  signatureAlgorithm.value=prefix==='ECDSA_'?'ECDSA_SHA256':'RSA_PKCS1_SHA256';
+ }
+}
+format.onchange=updatePackaging;
+certificate.onchange=updateAlgorithms;
+loadServerKeys.onclick=async()=>{
+ try{
+  const profiles=await json(api+'/admin/server-key-profiles',{headers:headers()});
+  const enabled=profiles.filter(x=>x.enabled);
+  serverKeyId.innerHTML=enabled.map(x=>`<option value="${x.serverKeyId}">${x.displayName} — ${x.deviceType} — ${x.serverKeyId}</option>`).join('');
+  if(!enabled.length)serverKeyId.innerHTML='<option value="">Etkin profil yok; yönetim ekranından ekleyin</option>';
+  log(profiles);
+ }catch(e){log(e.message)}
+};
+mode.onchange=()=>{
+ const client=mode.value==='CLIENT_SIDE';
+ clientIdentity.classList.toggle('hidden',!client);
+ serverIdentity.classList.toggle('hidden',client);
+ clientCardStep.classList.toggle('hidden',!client);
+ sign.disabled=client?!certificate._items?.length:false;
+ sign.textContent=client
+  ? 'Seçili sertifika ile imzala (PIN penceresi açılır)'
+  : 'Sunucudaki kart / HSM ile imzala';
+ if(!client)loadServerKeys.click();
+ updateAlgorithms();
+};
+registerDevice.onclick=async()=>{
+ try{
+  registerDevice.disabled=true;
+  const identity=await json(agent+'/device');
+  device.value=identity.deviceId;
+  const registered=await json(api+'/admin/client-devices',{method:'POST',headers:headers(),body:JSON.stringify({
+   deviceId:identity.deviceId,displayName:'Yerel demo ajanı',publicKey:identity.publicKey
+  })});
+  log({deviceIdentity:identity,registered});
+ }catch(e){log(e.message)}
+ finally{registerDevice.disabled=false}
+};
+discover.onclick=async()=>{
+  try{
+    discover.disabled=true;sign.disabled=true;card.disabled=true;certificate.disabled=true;
+    pin('Kart aranıyor. Public sertifikalar PIN kullanılmadan okunuyor.');
+    const cards=await json(agent+'/cards');
+    card.innerHTML=cards.filter(x=>x.status==='READY').map(x=>`<option value="${x.readerId}">${x.profileName} — ${x.readerId}</option>`).join('');
+    if(!card.value)throw new Error('READY durumunda kart bulunamadı');
+    card.disabled=false;
+    const certs=await json(agent+'/cards/'+encodeURIComponent(card.value)+'/certificates/refresh',{method:'POST',headers:{'X-EImza-Agent':'1'}});
+    certificate._items=certs.filter(x=>x.hasPrivateKey);
+    certificate.innerHTML=certificate._items.map((x,i)=>`<option value="${i}">${x.subject}</option>`).join('');
+    if(!certificate._items.length)throw new Error('Özel anahtarı bulunan imza sertifikası bulunamadı');
+    certificate.disabled=false;sign.disabled=false;
+    updateAlgorithms();
+    pin('Public imza sertifikaları PIN kullanılmadan yüklendi. İmzalama sırasında PIN bir kez istenir.');
+    log({cards,certificates:certificate._items});
+  }catch(e){pin('Kart veya public sertifika okuma işlemi tamamlanamadı. Ayrıntı işlem sonucunda.');log(e.message)}
+  finally{discover.disabled=false}
+};
+sign.onclick=async()=>{
+ try{
+  sign.disabled=true;
+  const client=mode.value==='CLIENT_SIDE';
+  const f=file.files[0], cert=certificate._items?.[Number(certificate.value)];
+  if(!f)throw new Error('Dosya seçilmelidir.');
+  if(client&&(!cert||!card.value))throw new Error('Client-side için kart ve sertifika seçilmelidir.');
+  if(!client&&!serverKeyId.value)throw new Error('Server-side için serverKeyId zorunludur.');
+  if(format.value==='PADES'&&f.type!=='application/pdf')throw new Error('PAdES için PDF seçilmelidir.');
+  pin(client?'İmzalama için yerel PIN penceresini takip edin. PIN bu sayfaya aktarılmaz.':'Server-side imzalama sunucuda yürütülüyor.');
+  const bytes=new Uint8Array(await f.arrayBuffer());
+  const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',bytes));
+  const session=await json(api+'/signing-sessions',{method:'POST',headers:{...headers(),'Idempotency-Key':crypto.randomUUID()},body:JSON.stringify({
+   documentId:crypto.randomUUID(),documentDigest:{algorithm:'SHA-256',value:b64url(digest)},
+   documentName:f.name,mediaType:f.type||'application/octet-stream',size:f.size,format:format.value,
+   targetLevel:level.value,turkishProfile:'P1',purpose:'Kullanıcı onaylı elektronik imza',
+   signingMode:mode.value,deviceId:client?device.value:null,serverKeyId:client?null:serverKeyId.value,
+   documentBase64:b64(bytes),signaturePackaging:packaging.value,
+   signatureAlgorithm:signatureAlgorithm.value
+  })});
+  let artifact;
+  if(client){
+   const algorithm=signatureAlgorithm.value;
+   const manifest=await json(`${api}/signing-sessions/${session.sessionId}/manifest`,{method:'POST',headers:headers(),body:JSON.stringify({
+    readerId:card.value,certificateFingerprint:cert.fingerprintSha256,certificateBase64:cert.certificateBase64,signatureAlgorithm:algorithm
+   })});
+   await json(`${api}/signing-sessions/${session.sessionId}/agent-connected`,{method:'POST',headers:headers()});
+   await json(`${api}/signing-sessions/${session.sessionId}/approve`,{method:'POST',headers:headers()});
+   const signed=await json(agent+'/signing-requests',{method:'POST',headers:{'Content-Type':'application/json','X-EImza-Agent':'1'},body:JSON.stringify({manifest:manifest.manifest,signature:manifest.signature})});
+   artifact=await json(`${api}/signing-sessions/${session.sessionId}/complete`,{method:'POST',headers:headers(),body:JSON.stringify({signature:signed.signature,deviceSignature:signed.deviceSignature})});
+  }else{
+   const oneTimePin=serverPin.value||null;
+   serverPin.value='';
+   artifact=await json(`${api}/signing-sessions/${session.sessionId}/server-sign`,{method:'POST',headers:headers(),body:JSON.stringify({pin:oneTimePin})});
+  }
+  const blob=new Blob([Uint8Array.from(atob(artifact.artifactBase64),c=>c.charCodeAt(0))],{type:artifact.mediaType});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=f.name+(format.value==='PADES'?'.signed.pdf':format.value==='XADES'?'.xades.xml':'.p7s');a.click();
+  pin('İmzalama tamamlandı. Çıktı dosyası indirildi.');
+  log({sessionId:session.sessionId,artifactId:artifact.artifactId,sha256:artifact.sha256});
+ }catch(e){pin('İmzalama tamamlanamadı. Ayrıntı işlem sonucunda.');log(e.message)}
+ finally{sign.disabled=mode.value==='CLIENT_SIDE'?!certificate._items?.length:false}
+};
+
+updatePackaging();
+</script>
+</body>
+</html>

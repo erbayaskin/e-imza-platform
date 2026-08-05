@@ -1,0 +1,26 @@
+name: Official source monitor
+
+on:
+  schedule:
+    - cron: "23 3 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check official sources
+        shell: pwsh
+        run: ./ops/scripts/check-official-sources.ps1 -OutputPath compliance-report.json
+      - name: Upload dated evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: official-source-report-${{ github.run_id }}
+          path: compliance-report.json
+          if-no-files-found: warn

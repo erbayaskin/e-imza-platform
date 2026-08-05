@@ -1,0 +1,7 @@
+.git
+.m2
+**/target
+**/.idea
+**/.vscode
+deploy/phase8/certs
+performance/fixtures

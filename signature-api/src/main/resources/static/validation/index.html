@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>E-İmza Doğrulama</title>
+  <style>
+    body{font:16px system-ui;max-width:900px;margin:40px auto;padding:0 20px;color:#17202a;background:#f7f9fb}
+    .card{background:white;border:1px solid #dce3e9;border-radius:10px;padding:20px;margin:18px 0}
+    label{display:block;margin:14px 0 5px;font-weight:600}input,select,button{font:inherit;padding:9px}
+    input,select{width:100%;box-sizing:border-box}button{margin-top:18px;cursor:pointer}.hidden{display:none}
+    .result{border-radius:8px;padding:14px;margin-top:18px}.VALID{background:#e8f6ec;border-left:5px solid #249246}
+    .INVALID{background:#fdecec;border-left:5px solid #c62828}.INDETERMINATE{background:#fff8df;border-left:5px solid #d39a00}
+    table{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px}th,td{border-bottom:1px solid #dce3e9;text-align:left;padding:9px;vertical-align:top}
+    pre{background:#17202a;color:#eaf2f8;padding:14px;white-space:pre-wrap;border-radius:8px;min-height:70px}
+  </style>
+</head>
+<body>
+<h1>İmza doğrulama</h1>
+<p>CAdES, XAdES ve PAdES imzalarını kriptografik, sertifika zinciri ve etkin politika kurallarıyla doğrular.</p>
+<p><a href="/demo/">?mzalama sayfas?na d?n</a> ? <a href="/multi-signature/">Paralel / seri imza</a> ? <a href="/admin/">Y?netim ekran?n? a?</a></p>
+
+<section class="card">
+  <label>Tenant UUID</label>
+  <input id="tenant" value="11111111-1111-1111-1111-111111111111">
+
+  <label>İmza formatı</label>
+  <select id="format"><option>CADES</option><option>XADES</option><option>PADES</option></select>
+
+  <label>Paketleme türü</label>
+  <select id="packaging"><option>AUTO</option></select>
+
+  <div id="originalGroup">
+    <label>Orijinal belge</label>
+    <input id="content" type="file">
+  </div>
+
+  <label id="signatureLabel">İmza dosyası (.p7s)</label>
+  <input id="signature" type="file" accept=".p7s,.xml,.pdf">
+
+  <button id="verify">İmzayı ve sertifika zincirini doğrula</button>
+  <div id="result" class="result INDETERMINATE">Henüz doğrulama yapılmadı.</div>
+  <div id="signerCard" class="card hidden">
+    <h2>İmzalayan bilgileri</h2>
+    <table><tbody id="signerInfo"></tbody></table>
+    <button id="downloadSignerCertificate" type="button">İmzacı sertifikasını indir (.cer)</button>
+  </div>
+  <table>
+    <thead><tr><th>Kontrol</th><th>Sonuç</th><th>Açıklama</th></tr></thead>
+    <tbody id="checks"></tbody>
+  </table>
+</section>
+
+<label>Ham doğrulama raporu</label>
+<pre id="log">Hazır.</pre>
+<script>
+const api='/api/v1';
+const b64=bytes=>{let value='';for(let i=0;i<bytes.length;i+=32768)value+=String.fromCharCode(...bytes.slice(i,i+32768));return btoa(value)};
+const headers=()=>({'Content-Type':'application/json','X-Tenant-Id':tenant.value});
+const packagingByFormat={CADES:['DETACHED','ATTACHED'],XADES:['DETACHED','ENVELOPED','ENVELOPING'],PADES:['ENVELOPED']};
+const showLog=value=>log.textContent=typeof value==='string'?value:JSON.stringify(value,null,2);
+const escapeHtml=value=>String(value??'-').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+async function json(url,options){const response=await fetch(url,options);const body=await response.json();if(!response.ok)throw new Error(JSON.stringify(body));return body}
+
+function showSigner(signer){
+  signerCard.classList.toggle('hidden',!signer);
+  if(!signer){signerInfo.innerHTML='';return}
+  const rows=[
+    ['Ad / ortak ad',signer.commonName],
+    ['Sertifika konusu',signer.subjectDn],
+    ['Kimlik / seri alanı',signer.serialNumberAttribute],
+    ['Kurum',signer.organization],
+    ['Birim',signer.organizationalUnit],
+    ['Ülke',signer.country],
+    ['Sertifikayı veren',signer.issuerDn],
+    ['Sertifika seri numarası',signer.certificateSerialNumber],
+    ['Geçerlilik başlangıcı',signer.validFrom],
+    ['Geçerlilik sonu',signer.validUntil],
+    ['Açık anahtar algoritması',signer.publicKeyAlgorithm],
+    ['SHA-256 parmak izi',signer.sha256Fingerprint]
+  ];
+  signerInfo.innerHTML=rows.map(([label,value])=>`<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join('');
+  downloadSignerCertificate.disabled=!signer.certificateBase64;
+  downloadSignerCertificate.onclick=()=>{
+    const binary=atob(signer.certificateBase64);
+    const bytes=new Uint8Array(binary.length);
+    for(let index=0;index<binary.length;index++)bytes[index]=binary.charCodeAt(index);
+    const url=URL.createObjectURL(new Blob([bytes],{type:'application/pkix-cert'}));
+    const link=document.createElement('a');
+    link.href=url;
+    link.download='imzalayan-'+String(signer.certificateSerialNumber||'sertifika').replace(/[^a-zA-Z0-9_-]/g,'_')+'.cer';
+    link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
+}
+
+function updateFormat(){
+  const pades=format.value==='PADES';
+  packaging.innerHTML=['AUTO',...packagingByFormat[format.value]].map(value=>`<option>${value}</option>`).join('');
+  signatureLabel.textContent=pades?'İmzalı PDF':'İmza dosyası ('+(format.value==='XADES'?'.xml':'.p7s')+')';
+  signature.accept=pades?'.pdf':format.value==='XADES'?'.xml':'.p7s';
+  updateOriginalVisibility();
+}
+function updateOriginalVisibility(){
+  const required=packaging.value==='DETACHED'||(packaging.value==='AUTO'&&format.value!=='PADES');
+  originalGroup.classList.toggle('hidden',!required);
+}
+format.onchange=updateFormat;
+packaging.onchange=updateOriginalVisibility;
+verify.onclick=async()=>{
+  try{
+    verify.disabled=true;
+    const signatureFile=signature.files[0];
+    const contentFile=content.files[0];
+    if(!signatureFile)throw new Error('İmza dosyası seçilmelidir.');
+    if(packaging.value==='DETACHED'&&!contentFile)throw new Error('Detached imza için orijinal belge seçilmelidir.');
+    const signatureBytes=new Uint8Array(await signatureFile.arrayBuffer());
+    const contentBytes=contentFile?new Uint8Array(await contentFile.arrayBuffer()):null;
+    const report=await json(api+'/validations/signatures',{method:'POST',headers:headers(),body:JSON.stringify({
+      format:format.value,
+      signaturePackaging:packaging.value,
+      content:contentBytes?b64(contentBytes):null,
+      signature:b64(signatureBytes),
+      validationTime:null
+    })});
+    result.className='result '+report.mainIndication;
+    result.innerHTML=`<strong>${report.mainIndication}</strong><br>${report.summary}<br>Format: ${report.detectedFormat||'-'} — Seviye: ${report.detectedLevel||'-'} — Politika: ${report.policyMode}`;
+    showSigner(report.signer);
+    checks.innerHTML=(report.checks||[]).map(item=>`<tr><td>${item.code}</td><td>${item.indication}</td><td>${item.message}</td></tr>`).join('');
+    showLog(report);
+  }catch(error){
+    result.className='result INVALID';
+    result.textContent='Doğrulama isteği tamamlanamadı: '+error.message;
+    showSigner(null);
+    checks.innerHTML='';
+    showLog(error.message);
+  }finally{verify.disabled=false}
+};
+updateFormat();
+</script>
+</body>
+</html>

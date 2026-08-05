@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: eimza-prod
+  namespace: argocd
+spec:
+  description: E-İmza üretim kaynakları
+  sourceRepos:
+    - https://git.example.invalid/platform/eimza-deployment.git
+  destinations:
+    - namespace: eimza
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  orphanedResources:
+    warn: true

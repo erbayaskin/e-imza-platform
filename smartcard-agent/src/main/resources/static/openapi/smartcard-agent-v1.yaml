@@ -1,0 +1,118 @@
+openapi: 3.1.0
+info:
+  title: E-İmza Akıllı Kart Yerel Aracısı
+  version: 1.0.0
+  description: >
+    Yalnız loopback üzerinde çalışan yerel kart aracısı. PIN hiçbir istek veya
+    cevapta taşınmaz; işletim sistemi üzerindeki yerel pencereden alınır.
+servers:
+  - url: http://127.0.0.1:18443/agent/v1
+paths:
+  /device:
+    get:
+      operationId: getDeviceIdentity
+      description: Ajan UUID'sini ve Ed25519 açık anahtarını döndürür; özel anahtar dışarı verilmez.
+      responses:
+        "200":
+          description: Client cihaz kimliği
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceIdentity"
+  /cards:
+    get:
+      operationId: listCards
+      responses:
+        "200":
+          description: Okuyucu ve kart keşif sonucu
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Card"
+  /cards/{readerId}/certificates:
+    get:
+      operationId: listCachedCertificates
+      parameters:
+        - $ref: "#/components/parameters/ReaderId"
+      responses:
+        "200":
+          description: Daha önce yerelde okunup bellekte tutulan sertifikalar
+  /cards/{readerId}/certificates/refresh:
+    post:
+      operationId: refreshCertificates
+      description: Sertifikaları önce public PKCS#11 oturumunda PIN'siz okur; kart erişim için zorunlu tutarsa yerel PIN penceresini açar. HTTP gövdesinde PIN kabul etmez.
+      parameters:
+        - $ref: "#/components/parameters/ReaderId"
+        - $ref: "#/components/parameters/AgentHeader"
+      responses:
+        "200":
+          description: Kart sertifikaları
+  /signing-requests:
+    post:
+      operationId: signDigest
+      description: Ed25519 imzalı, kısa ömürlü merkezi manifestteki SHA-256 özetini kartta imzalar.
+      parameters:
+        - $ref: "#/components/parameters/AgentHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignedManifest"
+      responses:
+        "200":
+          description: Base64URL kart imzası ve Ed25519 cihaz kanıtı
+        "400":
+          description: Manifest, kart, PIN veya sürücü hatası
+components:
+  parameters:
+    ReaderId:
+      name: readerId
+      in: path
+      required: true
+      schema:
+        type: string
+    AgentHeader:
+      name: X-EImza-Agent
+      in: header
+      required: true
+      schema:
+        type: string
+        const: "1"
+  schemas:
+    DeviceIdentity:
+      type: object
+      required: [deviceId, algorithm, publicKey, persistence]
+      properties:
+        deviceId: {type: string, format: uuid}
+        algorithm: {type: string, const: Ed25519}
+        publicKey: {type: string, contentEncoding: base64}
+        persistence: {type: string, enum: [EPHEMERAL, CONFIGURED]}
+    SignedManifest:
+      type: object
+      required: [manifest, signature]
+      properties:
+        manifest:
+          type: string
+          description: Base64URL kodlu özgün JSON baytları
+        signature:
+          type: string
+          description: Manifest baytlarının Ed25519 imzası, Base64URL
+    Card:
+      type: object
+      required: [readerId, cardPresent, status]
+      properties:
+        readerId:
+          type: string
+        atr:
+          type: [string, "null"]
+        cardPresent:
+          type: boolean
+        profileId:
+          type: [string, "null"]
+        profileName:
+          type: [string, "null"]
+        status:
+          type: string

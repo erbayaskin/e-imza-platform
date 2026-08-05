@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: eimza
+resources:
+  - namespace.yaml
+  - service-account.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - pdb.yaml
+  - hpa.yaml
+  - network-policy.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/name: eimza-api
+      app.kubernetes.io/part-of: eimza-platform
+    includeSelectors: true

@@ -1,0 +1,102 @@
+spring:
+  application:
+    name: e-imza-signature-api
+  profiles:
+    default: prod
+  datasource:
+    url: jdbc:h2:mem:eimza;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 26MB
+server:
+  shutdown: graceful
+  forward-headers-strategy: framework
+  error:
+    include-message: never
+    include-stacktrace: never
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  observations:
+    key-values:
+      application: ${spring.application.name}
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        http.server.requests: 100ms,250ms,500ms,1s,2s,5s,10s
+logging:
+  pattern:
+    level: "%5p [correlationId:%X{correlationId:-}]"
+eimza:
+  api:
+    maximum-document-size: 26214400
+    signing-session-ttl: PT5M
+  security:
+    maximum-request-bytes: ${EIMZA_MAXIMUM_REQUEST_BYTES:73400320}
+    tenant-claim: ${EIMZA_TENANT_CLAIM:tenant_id}
+  validation:
+    policy-version: ${EIMZA_VALIDATION_POLICY_VERSION:turkiye-baseline-v1}
+    minimum-rsa-bits: 2048
+    minimum-ec-bits: 256
+    require-qc-compliance: true
+    revocation-required: true
+    maximum-revocation-age: PT24H
+    clock-skew: PT5M
+    network-timeout: PT10S
+    required-certificate-policy-oids: []
+    signature-policy-oid: ${EIMZA_SIGNATURE_POLICY_OID:}
+    signature-policy-digest-algorithm-oid: 2.16.840.1.101.3.4.2.1
+    signature-policy-digest: ${EIMZA_SIGNATURE_POLICY_DIGEST:}
+    signature-policy-uri: ${EIMZA_SIGNATURE_POLICY_URI:}
+  timestamp:
+    enabled: ${EIMZA_TSA_ENABLED:false}
+    endpoint: ${EIMZA_TSA_ENDPOINT:}
+    provider-id: ${EIMZA_TSA_PROVIDER_ID:configured-tsa}
+    request-timeout: ${EIMZA_TSA_REQUEST_TIMEOUT:PT15S}
+    authorization-header: ${EIMZA_TSA_AUTHORIZATION_HEADER:}
+    archive-policy-oid: ${EIMZA_TSA_ARCHIVE_POLICY_OID:}
+  manifest:
+    private-key: ${EIMZA_MANIFEST_PRIVATE_KEY:}
+    public-key: ${EIMZA_MANIFEST_PUBLIC_KEY:}
+    key-id: ${EIMZA_MANIFEST_KEY_ID:local-ephemeral}
+    local-key-path: ${EIMZA_MANIFEST_LOCAL_KEY_PATH:.eimza/manifest-ed25519}
+  server-signing:
+    # Yönetici kontrollü HSM/sunucu akıllı kart profilleri burada tanımlanır.
+    # İstemci istekleri PKCS#11 yolu veya slot gönderemez; yalnız serverKeyId kullanır.
+    profiles: []
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: ${EIMZA_DB_URL}
+    username: ${EIMZA_DB_USERNAME}
+    password: ${EIMZA_DB_PASSWORD}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${EIMZA_OIDC_ISSUER_URI}
+          audiences: ${EIMZA_OIDC_AUDIENCE:eimza-api}
+          jws-algorithms: ${EIMZA_OIDC_JWS_ALGORITHMS:RS256}
+  h2:
+    console:
+      enabled: false

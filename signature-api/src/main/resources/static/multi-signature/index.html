@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>E-İmza Çoklu İmza Testi</title>
+  <style>
+    body{font:16px system-ui;max-width:920px;margin:36px auto;padding:0 20px;color:#17202a;background:#f7f9fb}
+    h1{margin-bottom:6px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .card{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:20px;margin:18px 0}
+    .notice{background:#eef6ff;border-left:5px solid #1976d2;padding:13px;margin:14px 0}
+    .warn{background:#fff8df;border-left-color:#d39a00}.hidden{display:none}
+    label{display:block;margin:13px 0 5px;font-weight:650}input,select,button{font:inherit;padding:9px}
+    input,select{width:100%;box-sizing:border-box}button{margin:14px 8px 0 0;cursor:pointer}
+    button:disabled,select:disabled{opacity:.55;cursor:not-allowed}
+    pre{background:#17202a;color:#eaf2f8;padding:14px;white-space:pre-wrap;min-height:90px;border-radius:8px}
+    @media(max-width:700px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<h1>İmzalı dosyaya paralel / seri imza</h1>
+<p>Önceden üretilmiş CAdES, XAdES veya PAdES artifact'ine yeni bir imzalayan ekler.</p>
+<p><a href="/demo/">İlk imza sayfası</a> • <a href="/validation/">İmza doğrulama</a> • <a href="/admin/">Yönetim</a></p>
+<div class="notice">
+ <strong>İmza semantiği:</strong> PARALLEL imzalayanlar aynı belgeyi bağımsız onaylar.
+ SERIAL, CAdES/XAdES'te seçili imzanın karşı-imzasını; PAdES'te PDF'e eklenen yeni incremental approval revision'ını üretir.
+</div>
+
+<section class="card">
+ <h2>1. Ortam ve imzalayan</h2>
+ <div class="grid">
+  <div><label>Tenant UUID</label><input id="tenant" value="11111111-1111-1111-1111-111111111111"></div>
+  <div><label>İmzalama modu</label><select id="mode"><option value="CLIENT_SIDE">Client-side akıllı kart</option><option value="SERVER_SIDE">Server-side kart / HSM</option></select></div>
+ </div>
+ <div id="clientIdentity">
+  <div class="grid">
+   <div><label>Cihaz UUID</label><input id="device" value="a8a0dc09-54ab-40b7-b404-bebd55ff1756"></div>
+   <div><label>Kart / okuyucu</label><select id="card" disabled><option>Kartı tarayın</option></select></div>
+  </div>
+  <label>İmza sertifikası</label><select id="certificate" disabled><option>Sertifikaları yükleyin</option></select>
+  <button id="registerDevice">Agent cihazını kaydet</button><button id="discover">Kartı ve public sertifikaları yükle</button>
+ </div>
+ <div id="serverIdentity" class="hidden">
+  <label>Server-side anahtar profili</label><select id="serverKeyId"><option>Profilleri yükleyin</option></select>
+  <label>Sunucu akıllı kart PIN'i</label><input id="serverPin" type="password" autocomplete="off" placeholder="HSM için boş; kart için tek kullanımlık">
+  <button id="loadServerKeys">Profilleri yükle</button>
+ </div>
+</section>
+
+<section class="card">
+ <h2>2. Mevcut imza ve yeni imza tipi</h2>
+ <label>Mevcut imzalı artifact (.p7s, .xml veya .pdf)</label><input id="existingFile" type="file" accept=".p7s,.xml,.pdf">
+ <label id="originalLabel">Orijinal belge (paralel CAdES/XAdES için zorunlu)</label><input id="originalFile" type="file">
+ <div class="grid">
+  <div><label>Format</label><select id="format"><option>CADES</option><option>XADES</option><option>PADES</option></select></div>
+  <div><label>Çoklu imza tipi</label><select id="multiType"><option>PARALLEL</option><option>SERIAL</option></select></div>
+  <div><label>Paketleme</label><select id="packaging"></select></div>
+  <div><label>Seri imza hedef indeksi (0 tabanlı)</label><input id="targetIndex" type="number" min="0" value="0"></div>
+  <div><label>İmza algoritması</label><select id="signatureAlgorithm">
+   <option>RSA_PKCS1_SHA256</option><option>RSA_PKCS1_SHA384</option><option>RSA_PKCS1_SHA512</option>
+   <option>ECDSA_SHA256</option><option>ECDSA_SHA384</option><option>ECDSA_SHA512</option>
+  </select></div>
+  <div><label>Seviye</label><select id="level"><option>B_B</option><option>B_T</option></select></div>
+ </div>
+ <button id="sign" disabled>Yeni imzayı ekle</button>
+ <div id="status" class="notice warn">Kart veya server-side profil seçimi bekleniyor.</div>
+</section>
+
+<label>İşlem sonucu</label><pre id="log">Hazır.</pre>
+<script>
+const api='/api/v1',agent='http://127.0.0.1:18443/agent/v1';
+const out=x=>log.textContent=typeof x==='string'?x:JSON.stringify(x,null,2);
+const setStatus=x=>status.textContent=x;
+const b64=bytes=>{let s='';for(let i=0;i<bytes.length;i+=32768)s+=String.fromCharCode(...bytes.slice(i,i+32768));return btoa(s)};
+const b64url=bytes=>b64(bytes).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
+const headers=()=>({'Content-Type':'application/json','X-Tenant-Id':tenant.value});
+async function json(url,options={}){const r=await fetch(url,options);const x=await r.json();if(!r.ok)throw new Error(JSON.stringify(x));return x}
+const packagingByFormat={CADES:['DETACHED','ATTACHED'],XADES:['DETACHED','ENVELOPING'],PADES:['ENVELOPED']};
+
+function updateControls(){
+ const pades=format.value==='PADES';
+ if(pades){multiType.value='SERIAL';multiType.disabled=true;targetIndex.value='0'}else multiType.disabled=false;
+ const values=packagingByFormat[format.value];
+ packaging.innerHTML=values.map(x=>`<option>${x}</option>`).join('');
+ packaging.disabled=values.length===1;
+ targetIndex.disabled=multiType.value!=='SERIAL'||pades;
+ originalLabel.textContent=pades
+  ? 'Orijinal belge gerekmez; mevcut imzalı PDF yeni revision kaynağıdır'
+  : multiType.value==='PARALLEL'
+    ? 'Orijinal belge (paralel imza için zorunlu)'
+    : 'Orijinal belge (seri karşı-imzada isteğe bağlı)';
+ originalFile.disabled=pades;
+}
+format.onchange=updateControls;multiType.onchange=updateControls;
+
+function updateAlgorithms(){
+ const cert=certificate._items?.[Number(certificate.value)];
+ const prefix=mode.value==='CLIENT_SIDE'&&cert?(cert.publicKeyAlgorithm==='EC'?'ECDSA_':'RSA_PKCS1_'):null;
+ [...signatureAlgorithm.options].forEach(x=>x.hidden=prefix?!x.value.startsWith(prefix):false);
+ if(prefix&&!signatureAlgorithm.value.startsWith(prefix))signatureAlgorithm.value=prefix==='ECDSA_'?'ECDSA_SHA256':'RSA_PKCS1_SHA256';
+}
+certificate.onchange=updateAlgorithms;
+
+mode.onchange=()=>{
+ const client=mode.value==='CLIENT_SIDE';
+ clientIdentity.classList.toggle('hidden',!client);serverIdentity.classList.toggle('hidden',client);
+ sign.disabled=client?!certificate._items?.length:false;
+ if(!client)loadServerKeys.click();
+ updateAlgorithms();
+};
+registerDevice.onclick=async()=>{
+ try{
+  const identity=await json(agent+'/device');device.value=identity.deviceId;
+  const result=await json(api+'/admin/client-devices',{method:'POST',headers:headers(),body:JSON.stringify({
+   deviceId:identity.deviceId,displayName:'Çoklu imza demo agentı',publicKey:identity.publicKey
+  })});out(result);
+ }catch(e){out(e.message)}
+};
+discover.onclick=async()=>{
+ try{
+  discover.disabled=true;sign.disabled=true;
+  const cards=await json(agent+'/cards');
+  card.innerHTML=cards.filter(x=>x.status==='READY').map(x=>`<option value="${x.readerId}">${x.profileName} — ${x.readerId}</option>`).join('');
+  if(!card.value)throw new Error('READY kart bulunamadı');
+  card.disabled=false;
+  const certs=await json(agent+'/cards/'+encodeURIComponent(card.value)+'/certificates/refresh',{method:'POST',headers:{'X-EImza-Agent':'1'}});
+  certificate._items=certs.filter(x=>x.hasPrivateKey);
+  certificate.innerHTML=certificate._items.map((x,i)=>`<option value="${i}">${x.subject}</option>`).join('');
+  if(!certificate._items.length)throw new Error('İmza sertifikası bulunamadı');
+  certificate.disabled=false;sign.disabled=false;updateAlgorithms();setStatus('Sertifika seçildi. PIN yalnız imza sırasında agent tarafından istenir.');
+ }catch(e){out(e.message)}finally{discover.disabled=false}
+};
+loadServerKeys.onclick=async()=>{
+ try{
+  const profiles=await json(api+'/admin/server-key-profiles',{headers:headers()});
+  const enabled=profiles.filter(x=>x.enabled);
+  serverKeyId.innerHTML=enabled.map(x=>`<option value="${x.serverKeyId}">${x.displayName} — ${x.deviceType}</option>`).join('');
+  sign.disabled=!enabled.length;out(profiles);
+ }catch(e){out(e.message)}
+};
+
+sign.onclick=async()=>{
+ try{
+  sign.disabled=true;
+  const client=mode.value==='CLIENT_SIDE';
+  const artifactFile=existingFile.files[0],sourceFile=originalFile.files[0];
+  const cert=certificate._items?.[Number(certificate.value)];
+  if(!artifactFile)throw new Error('Mevcut imzalı artifact seçilmelidir.');
+  if(client&&(!cert||!card.value))throw new Error('Kart ve sertifika seçilmelidir.');
+  if(!client&&!serverKeyId.value)throw new Error('Server-side profil seçilmelidir.');
+  if(multiType.value==='PARALLEL'&&!sourceFile)throw new Error('Paralel imza için orijinal belge seçilmelidir.');
+  if(format.value==='PADES'&&!artifactFile.name.toLowerCase().endsWith('.pdf'))throw new Error('PAdES için imzalı PDF seçilmelidir.');
+  const existingBytes=new Uint8Array(await artifactFile.arrayBuffer());
+  const sourceBytes=sourceFile?new Uint8Array(await sourceFile.arrayBuffer()):existingBytes;
+  const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',sourceBytes));
+  const includeDocument=multiType.value==='PARALLEL'&&format.value!=='PADES';
+  const session=await json(api+'/signing-sessions',{method:'POST',headers:{...headers(),'Idempotency-Key':crypto.randomUUID()},body:JSON.stringify({
+   documentId:crypto.randomUUID(),documentDigest:{algorithm:'SHA-256',value:b64url(digest)},
+   documentName:sourceFile?.name||artifactFile.name,mediaType:sourceFile?.type||artifactFile.type||'application/octet-stream',
+   size:sourceBytes.length,format:format.value,targetLevel:level.value,turkishProfile:'P1',
+   purpose:multiType.value==='PARALLEL'?'Bağımsız paralel onay':'Seri onay / karşı-imza',
+   signingMode:mode.value,deviceId:client?device.value:null,serverKeyId:client?null:serverKeyId.value,
+   documentBase64:includeDocument?b64(sourceBytes):null,signaturePackaging:packaging.value,
+   signatureAlgorithm:signatureAlgorithm.value,multiSignatureType:multiType.value,
+   existingArtifactBase64:b64(existingBytes),targetSignatureIndex:Number(targetIndex.value||0)
+  })});
+  let artifact;
+  if(client){
+   const manifest=await json(`${api}/signing-sessions/${session.sessionId}/manifest`,{method:'POST',headers:headers(),body:JSON.stringify({
+    readerId:card.value,certificateFingerprint:cert.fingerprintSha256,certificateBase64:cert.certificateBase64,signatureAlgorithm:signatureAlgorithm.value
+   })});
+   await json(`${api}/signing-sessions/${session.sessionId}/agent-connected`,{method:'POST',headers:headers()});
+   await json(`${api}/signing-sessions/${session.sessionId}/approve`,{method:'POST',headers:headers()});
+   setStatus('Agent PIN penceresini takip edin.');
+   const signed=await json(agent+'/signing-requests',{method:'POST',headers:{'Content-Type':'application/json','X-EImza-Agent':'1'},body:JSON.stringify({manifest:manifest.manifest,signature:manifest.signature})});
+   artifact=await json(`${api}/signing-sessions/${session.sessionId}/complete`,{method:'POST',headers:headers(),body:JSON.stringify({signature:signed.signature,deviceSignature:signed.deviceSignature})});
+  }else{
+   const pin=serverPin.value||null;serverPin.value='';
+   artifact=await json(`${api}/signing-sessions/${session.sessionId}/server-sign`,{method:'POST',headers:headers(),body:JSON.stringify({pin})});
+  }
+  const bytes=Uint8Array.from(atob(artifact.artifactBase64),c=>c.charCodeAt(0));
+  const ext=format.value==='PADES'?'.multi-signed.pdf':format.value==='XADES'?'.multi.xades.xml':'.multi.p7s';
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([bytes],{type:artifact.mediaType}));a.download=artifactFile.name+ext;a.click();
+  setStatus('Yeni '+multiType.value+' imza eklendi ve artifact indirildi.');
+  out({session,artifactId:artifact.artifactId,sha256:artifact.sha256});
+ }catch(e){setStatus('Çoklu imza tamamlanamadı.');out(e.message)}
+ finally{sign.disabled=mode.value==='CLIENT_SIDE'?!certificate._items?.length:false}
+};
+updateControls();
+</script>
+</body>
+</html>

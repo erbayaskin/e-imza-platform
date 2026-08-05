@@ -1,0 +1,22 @@
+eimza:
+  server-signing:
+    profiles:
+      - server-key-id: kurumsal-hsm-imza-1
+        device-type: HSM
+        pkcs11-library: C:/Program Files/HSM/vendor-pkcs11.dll
+        slot-list-index: 4
+        certificate-fingerprint: SERTIFIKA_SHA256_PARMAK_IZI
+        credential-ref: EIMZA_HSM_PIN_KURUMSAL_1
+        allowed-tenant-ids:
+          - 11111111-1111-1111-1111-111111111111
+
+      - server-key-id: sunucu-akis-kart-1
+        device-type: SMART_CARD
+        pkcs11-library: C:/Windows/System32/akisp11.dll
+        atr: "3B9F978131FE4580655443D3228231C073F621808105D3"
+        atr-mask: "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+        # Yalnız sürücü sertifikayı PIN öncesi göstermiyorsa fallback olarak kullanılır.
+        slot-list-index: 0
+        certificate-fingerprint: SERTIFIKA_SHA256_PARMAK_IZI
+        allowed-tenant-ids:
+          - 11111111-1111-1111-1111-111111111111

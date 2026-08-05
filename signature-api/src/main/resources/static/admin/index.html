@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>E-İmza Yönetim ve Tanımlama</title>
+  <style>
+    :root{font-family:system-ui;color:#17202a;background:#f4f7fa}
+    body{max-width:1180px;margin:28px auto;padding:0 20px}
+    header{display:flex;justify-content:space-between;align-items:center;gap:20px}
+    nav a{margin-left:14px}section{background:#fff;border:1px solid #dbe3ea;border-radius:12px;padding:20px;margin:20px 0}
+    h1{margin:0}h2{margin-top:0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px}
+    .full{grid-column:1/-1}label{display:block;font-weight:650;margin-bottom:4px}
+    input,select,button{font:inherit;padding:9px;border-radius:6px;border:1px solid #aebbc6;box-sizing:border-box}
+    input,select{width:100%}input[type=checkbox],input[type=radio]{width:auto}
+    button{cursor:pointer;background:#f8fafc}button.primary{background:#1261a0;color:#fff;border-color:#1261a0}
+    button.danger{color:#a11;border-color:#d99}.actions{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap}
+    table{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px}th,td{text-align:left;border-bottom:1px solid #e2e8ee;padding:8px;vertical-align:top}
+    .status{background:#edf6ff;border-left:4px solid #1976d2;padding:10px;margin-top:12px;white-space:pre-wrap}
+    .notice{background:#fff8df;border-left:4px solid #d99c00;padding:10px;margin:12px 0}
+    pre{background:#17202a;color:#eef5fa;padding:12px;border-radius:8px;max-height:260px;overflow:auto}
+    @media(max-width:760px){.grid{grid-template-columns:1fr}.full{grid-column:auto}table{display:block;overflow:auto}}
+  </style>
+</head>
+<body>
+<header>
+ <div><h1>E-İmza yönetimi</h1><p>Sunucu cihazları, güven deposu, TSA ve doğrulama politikaları</p></div>
+ <nav><a href="/demo/">İmzalama demosu</a></nav>
+</header>
+
+<section>
+ <h2>Ortam ve tenant</h2>
+ <div class="grid">
+  <div><label for="tenant">Tenant UUID</label><input id="tenant" value="11111111-1111-1111-1111-111111111111"></div>
+ </div>
+ <div class="notice">Local H2 veritabanındaki tanımlar API kapatıldığında silinir. Üretimde bu sayfa için <code>eimza.admin</code> yetkisi gerekir.</div>
+</section>
+
+<section id="cardCatalog">
+ <h2>Akıllı kart profil kataloğu ve otomatik tanımlama</h2>
+ <p>Takılı kartların ATR değeri okunur, katalogdaki kartlarla eşleştirilir ve server-side profil formu otomatik doldurulur. Katalogda olmayan kartlar özel profil olarak elle tamamlanabilir.</p>
+ <div class="grid">
+  <div><label for="cardTemplate">Hazır kart profili</label><select id="cardTemplate"><option value="">Katalog yükleniyor...</option></select></div>
+  <div><label for="detectedCard">Takılı kart / okuyucu</label><select id="detectedCard"><option value="">Önce kartları tarayın</option></select></div>
+ </div>
+ <div class="actions">
+  <button id="scanCards" class="primary">Takılı kartları tara ve eşleştir</button>
+  <button id="applyCardTemplate">Seçimi profil formuna uygula</button>
+  <button id="createDetectedProfile">Profili otomatik oluştur</button>
+  <button id="reloadCardCatalog">Kataloğu yenile</button>
+ </div>
+ <div id="cardCatalogStatus" class="status">Kart profil kataloğu yükleniyor.</div>
+ <table><thead><tr><th>Okuyucu</th><th>ATR</th><th>Eşleşen profil</th><th>Durum</th></tr></thead><tbody id="detectedCardRows"></tbody></table>
+</section>
+
+<section id="serverKeys">
+ <h2>Server-side akıllı kart / HSM profilleri</h2>
+ <p>Server-side imza agent kullanmaz. Profil burada oluşturulur ve üretilen <code>serverKeyId</code> demo ekranında seçilir.</p>
+ <input id="serverProfileId" type="hidden">
+ <div class="grid">
+  <div><label for="serverDisplayName">Görünen ad</label><input id="serverDisplayName" placeholder="Sunucu AKİS kartı"></div>
+  <div><label for="serverDeviceType">Cihaz türü</label><select id="serverDeviceType"><option>SMART_CARD</option><option>HSM</option></select></div>
+  <div class="full"><label for="serverLibrary">PKCS#11 kütüphane dosyası</label><input id="serverLibrary" value="C:/Windows/System32/akisp11.dll"></div>
+  <div><label for="serverSlot">Slot list index (HSM için zorunlu)</label><input id="serverSlot" type="number" min="0" placeholder="Akıllı kartta otomatik"></div>
+  <div><label for="serverCredentialRef">Credential environment variable adı</label><input id="serverCredentialRef" placeholder="HSM_PIN"></div>
+  <div><label for="serverAtr">ATR (akıllı kart)</label><input id="serverAtr" value="3B9F978131FE4580655443D3228231C073F621808105D3"></div>
+  <div><label for="serverAtrMask">ATR maskesi</label><input id="serverAtrMask" value="FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"></div>
+  <div><label for="serverFingerprint">Sertifika SHA-256 parmak izi (isteğe bağlı)</label><input id="serverFingerprint"></div>
+  <div><label for="serverTenants">İzinli tenant UUID’leri (virgülle)</label><input id="serverTenants" value="11111111-1111-1111-1111-111111111111"></div>
+  <div><label><input id="serverEnabled" type="checkbox" checked> Etkin</label></div>
+ </div>
+ <div class="actions"><button id="saveServer" class="primary">Profili kaydet</button><button id="resetServer">Formu temizle</button><button id="loadServers">Listeyi yenile</button></div>
+ <div id="serverStatus" class="status">Henüz yüklenmedi.</div>
+ <table><thead><tr><th>Ad / serverKeyId</th><th>Tür</th><th>Kütüphane / slot</th><th>Durum</th><th>İşlem</th></tr></thead><tbody id="serverRows"></tbody></table>
+</section>
+
+<section id="trust">
+ <h2>Güvenilir kök ve alt kök sertifikaları</h2>
+ <p>Son kullanıcı sertifikasını değil, yalnız güvenilir CA kök/alt kök sertifikalarını yükleyin.</p>
+ <div class="grid">
+  <div class="full"><label for="trustFile">DER/PEM sertifika dosyası</label><input id="trustFile" type="file" accept=".cer,.crt,.der,.pem"></div>
+  <div><label for="trustType">Tür</label><select id="trustType"><option>ROOT</option><option>INTERMEDIATE</option></select></div>
+  <div><label for="trustName">Görünen ad</label><input id="trustName" placeholder="Güvenilir ESHS kökü"></div>
+  <div><label><input id="trustEnabled" type="checkbox" checked> Etkin</label></div>
+ </div>
+ <div class="actions"><button id="addTrust" class="primary">Sertifikayı ekle</button><button id="loadTrust">Depoyu yenile</button></div>
+ <div id="trustStatus" class="status">Henüz yüklenmedi.</div>
+ <table><thead><tr><th>Ad</th><th>Tür</th><th>Subject / parmak izi</th><th>Durum</th><th>İşlem</th></tr></thead><tbody id="trustRows"></tbody></table>
+</section>
+
+<section id="tsa">
+ <h2>Zaman damgası servisi</h2>
+ <div class="notice">Yetkilendirme değeri DB’ye yazılmaz. <code>credentialRef</code>, örneğin <code>TSA_AUTHORIZATION</code> adlı ortam değişkenini gösterir; değişkenin değeri tam Authorization header olmalıdır.</div>
+ <div class="grid">
+  <div><label for="tsaProvider">Sağlayıcı ID</label><input id="tsaProvider" value="configured-tsa"></div>
+  <div><label for="tsaEndpoint">RFC 3161 endpoint</label><input id="tsaEndpoint" placeholder="https://tsa.example.com"></div>
+  <div><label for="tsaTimeout">Timeout (saniye)</label><input id="tsaTimeout" type="number" min="1" max="120" value="15"></div>
+  <div><label for="tsaCredentialRef">Credential reference</label><input id="tsaCredentialRef" placeholder="TSA_AUTHORIZATION"></div>
+  <div><label for="tsaPolicyOid">Arşiv politika OID</label><input id="tsaPolicyOid"></div>
+  <div><label><input id="tsaEnabled" type="checkbox"> Etkin</label></div>
+ </div>
+ <div class="actions"><button id="saveTsa" class="primary">Yeni TSA sürümünü kaydet</button><button id="loadTsa">Yükle</button></div>
+ <div id="tsaStatus" class="status">Henüz yüklenmedi.</div>
+</section>
+
+<section id="policies">
+ <h2>Sertifika / imza doğrulama politikaları</h2>
+ <label><input type="radio" name="policyMode" value="STRICT" checked> Tüm politikalar aktif</label>
+ <label><input id="customPolicyMode" type="radio" name="policyMode" value="CUSTOM"> Özel politika seçimi</label>
+ <label><input id="auditOnlyMode" type="radio" name="policyMode" value="AUDIT_ONLY"> Tüm isteğe bağlı politikalar pasif (AUDIT_ONLY)</label>
+ <div id="optionalPolicies">
+  <label><input id="qcPolicy" type="checkbox" checked> Nitelikli sertifika (QC) kontrolü</label>
+  <label><input id="certificatePolicy" type="checkbox" checked> Sertifika politika OID kontrolü</label>
+  <label><input id="revocationPolicy" type="checkbox" checked> OCSP / SİL erişilebilirlik politikası</label>
+  <label><input id="signaturePolicy" type="checkbox" checked> İmza politika OID kontrolü</label>
+  <fieldset>
+   <legend>İmzalama sertifikası tarih kontrolü</legend>
+   <label><input id="signingCertValidityActive" type="radio" name="signingCertValidity" value="true" checked> Aktif</label>
+   <label><input id="signingCertValidityPassive" type="radio" name="signingCertValidity" value="false"> Pasif — yalnız local/test fiziksel kart testi</label>
+  </fieldset>
+  <div class="notice">Pasif seçim, süresi dolmuş sertifikayla yalnız kriptografik kart testine izin verir. Üretilen imza geçerli/nitelikli e-imza kabul edilmez; production profilinde bu kontrol zorunlu olarak aktiftir.</div>
+ </div>
+ <div class="actions"><button id="savePolicy" class="primary">Politikayı kaydet</button><button id="loadPolicy">Yükle</button></div>
+ <div id="policyStatus" class="status">Henüz yüklenmedi.</div>
+</section>
+
+<h2>Son API sonucu</h2><pre id="log">Hazır.</pre>
+<script>
+const api='/api/v1';
+const $=id=>document.getElementById(id);
+const esc=x=>String(x??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+const headers=()=>({'Content-Type':'application/json','X-Tenant-Id':$('tenant').value});
+const log=x=>$('log').textContent=typeof x==='string'?x:JSON.stringify(x,null,2);
+async function json(url,options={}){const r=await fetch(url,options);if(r.status===204)return null;const x=await r.json();if(!r.ok)throw new Error(JSON.stringify(x));return x}
+const splitTenants=value=>value.split(',').map(x=>x.trim()).filter(Boolean);
+
+let cardTemplates=[],detectedCards=[];
+async function loadCardCatalog(){
+ try{
+  cardTemplates=await json(api+'/admin/card-profile-catalog',{headers:headers()});
+  $('cardTemplate').innerHTML=cardTemplates.map(x=>`<option value="${esc(x.id)}">${esc(x.displayName)} — ${esc(x.vendor)}</option>`).join('');
+  $('cardCatalogStatus').textContent=`${cardTemplates.length} hazır kart profili yüklendi.`;
+ }catch(e){$('cardCatalogStatus').textContent=e.message;log(e.message)}
+}
+async function scanCards(){
+ try{
+  $('scanCards').disabled=true;
+  detectedCards=await json(api+'/admin/card-profile-catalog/detected-cards',{headers:headers()});
+  const present=detectedCards.filter(x=>x.cardPresent);
+  $('detectedCard').innerHTML=present.length
+   ? present.map((x,i)=>`<option value="${i}">${esc(x.readerName)} — ${esc(x.matchedTemplateName||'Bilinmeyen kart')}</option>`).join('')
+   : '<option value="">Takılı kart bulunamadı</option>';
+  $('detectedCardRows').innerHTML=detectedCards.map(x=>`<tr><td>${esc(x.readerName||'-')}</td><td><code>${esc(x.atr||'-')}</code></td><td>${esc(x.matchedTemplateName||'-')}</td><td>${esc(x.status)}</td></tr>`).join('');
+  const matched=present.find(x=>x.matchedTemplateId);
+  if(matched){
+   $('detectedCard').value=String(present.indexOf(matched));
+   $('cardTemplate').value=matched.matchedTemplateId;
+   applyCardTemplate();
+   $('cardCatalogStatus').textContent=`${matched.matchedTemplateName} ATR üzerinden eşleştirildi. Profil formu hazır.`;
+  }else{
+   $('cardCatalogStatus').textContent=present.length?'Kart bulundu fakat katalog eşleşmesi yok.':'Takılı kart bulunamadı.';
+  }
+  log(detectedCards);
+ }catch(e){$('cardCatalogStatus').textContent=e.message;log(e.message)}
+ finally{$('scanCards').disabled=false}
+}
+function selectedDetectedCard(){
+ const present=detectedCards.filter(x=>x.cardPresent);
+ const index=Number($('detectedCard').value);
+ return Number.isInteger(index)?present[index]:null;
+}
+function applyCardTemplate(){
+ const detected=selectedDetectedCard();
+ const template=cardTemplates.find(x=>x.id===(detected?.matchedTemplateId||$('cardTemplate').value));
+ if(!template){$('cardCatalogStatus').textContent='Uygulanacak kart profili seçilmedi.';return}
+ $('cardTemplate').value=template.id;
+ $('serverProfileId').value='';
+ $('serverDisplayName').value=template.displayName;
+ $('serverDeviceType').value='SMART_CARD';
+ $('serverLibrary').value=template.defaultPkcs11Library||'';
+ $('serverSlot').value='';
+ $('serverCredentialRef').value='';
+ $('serverAtr').value=detected?.atr||template.atr||'';
+ $('serverAtrMask').value=template.atrMask||($('serverAtr').value?'FF'.repeat($('serverAtr').value.length/2):'');
+ $('serverFingerprint').value='';
+ $('serverTenants').value=$('tenant').value;
+ $('serverEnabled').checked=true;
+ $('cardCatalogStatus').textContent=`${template.displayName} profil formuna uygulandı; slot ATR ile otomatik bulunacak.`;
+}
+$('reloadCardCatalog').onclick=loadCardCatalog;
+$('scanCards').onclick=scanCards;
+$('applyCardTemplate').onclick=applyCardTemplate;
+$('cardTemplate').onchange=applyCardTemplate;
+$('detectedCard').onchange=()=>{const x=selectedDetectedCard();if(x?.matchedTemplateId){$('cardTemplate').value=x.matchedTemplateId;applyCardTemplate()}};
+$('createDetectedProfile').onclick=async()=>{
+ try{
+  applyCardTemplate();
+  if(!$('serverAtr').value)throw Error('Otomatik profil için takılı/eşleşmiş kart ATR değeri bulunamadı.');
+  const x=await json(api+'/admin/server-key-profiles',{method:'POST',headers:headers(),body:JSON.stringify(serverBody())});
+  $('cardCatalogStatus').textContent=`Profil oluşturuldu. serverKeyId: ${x.serverKeyId}`;
+  log(x);await loadServers();
+ }catch(e){$('cardCatalogStatus').textContent=e.message;log(e.message)}
+};
+
+let serverItems=[];
+async function loadServers(){
+ try{
+  serverItems=await json(api+'/admin/server-key-profiles',{headers:headers()});
+  $('serverRows').innerHTML=serverItems.map(x=>`<tr><td>${esc(x.displayName)}<br><code>${esc(x.serverKeyId)}</code></td><td>${esc(x.deviceType)}</td><td>${esc(x.pkcs11Library)}<br>slot: ${x.slotListIndex??'otomatik'}</td><td>${x.enabled?'Etkin':'Pasif'}</td><td><button data-server-edit="${x.id}">Düzenle</button> <button class="danger" data-server-delete="${x.id}">Sil</button></td></tr>`).join('');
+  document.querySelectorAll('[data-server-edit]').forEach(b=>b.onclick=()=>editServer(b.dataset.serverEdit));
+  document.querySelectorAll('[data-server-delete]').forEach(b=>b.onclick=()=>deleteServer(b.dataset.serverDelete));
+  $('serverStatus').textContent=`${serverItems.length} profil bulundu.`;log(serverItems);
+ }catch(e){$('serverStatus').textContent=e.message;log(e.message)}
+}
+function serverBody(){
+ return {displayName:$('serverDisplayName').value,deviceType:$('serverDeviceType').value,
+  pkcs11Library:$('serverLibrary').value,slotListIndex:$('serverSlot').value===''?null:Number($('serverSlot').value),
+  atr:$('serverAtr').value||null,atrMask:$('serverAtrMask').value||null,
+  certificateFingerprint:$('serverFingerprint').value||null,credentialRef:$('serverCredentialRef').value||null,
+  allowedTenantIds:splitTenants($('serverTenants').value),enabled:$('serverEnabled').checked};
+}
+$('saveServer').onclick=async()=>{try{const id=$('serverProfileId').value;const x=await json(api+'/admin/server-key-profiles'+(id?'/'+id:''),{method:id?'PUT':'POST',headers:headers(),body:JSON.stringify(serverBody())});$('serverStatus').textContent='Kaydedildi. serverKeyId: '+x.serverKeyId;log(x);resetServer();await loadServers()}catch(e){log(e.message);$('serverStatus').textContent=e.message}};
+$('loadServers').onclick=loadServers;
+function editServer(id){const x=serverItems.find(y=>y.id===id);if(!x)return;$('serverProfileId').value=x.id;$('serverDisplayName').value=x.displayName;$('serverDeviceType').value=x.deviceType;$('serverLibrary').value=x.pkcs11Library;$('serverSlot').value=x.slotListIndex??'';$('serverAtr').value=x.atr??'';$('serverAtrMask').value=x.atrMask??'';$('serverFingerprint').value=x.certificateFingerprint??'';$('serverCredentialRef').value=x.credentialRef??'';$('serverTenants').value=x.allowedTenantIds.join(',');$('serverEnabled').checked=x.enabled;scrollTo({top:$('serverKeys').offsetTop,behavior:'smooth'})}
+async function deleteServer(id){if(!confirm('Server key profili silinsin mi?'))return;try{await json(api+'/admin/server-key-profiles/'+id,{method:'DELETE',headers:headers()});await loadServers()}catch(e){log(e.message)}}
+function resetServer(){$('serverProfileId').value='';$('serverDisplayName').value='';$('serverSlot').value='';$('serverFingerprint').value='';$('serverCredentialRef').value='';$('serverEnabled').checked=true}
+$('resetServer').onclick=resetServer;
+
+let trustItems=[];
+async function loadTrust(){try{const x=await json(api+'/admin/trusted-certificates',{headers:headers()});trustItems=x.certificates||[];$('trustRows').innerHTML=trustItems.map(c=>`<tr><td>${esc(c.displayName)}</td><td>${esc(c.trustType)}</td><td>${esc(c.subjectDn)}<br><code>${esc(c.fingerprintSha256)}</code></td><td>${c.enabled?'Etkin':'Pasif'}</td><td><button data-trust-edit="${c.certificateId}">Düzenle</button> <button class="danger" data-trust-delete="${c.certificateId}">Sil</button></td></tr>`).join('');document.querySelectorAll('[data-trust-edit]').forEach(b=>b.onclick=()=>editTrust(b.dataset.trustEdit));document.querySelectorAll('[data-trust-delete]').forEach(b=>b.onclick=()=>deleteTrust(b.dataset.trustDelete));$('trustStatus').textContent=`Depo sürümü: ${x.version||'boş'} — ${trustItems.length} sertifika`;log(x)}catch(e){$('trustStatus').textContent=e.message;log(e.message)}}
+$('loadTrust').onclick=loadTrust;
+$('addTrust').onclick=async()=>{try{const f=$('trustFile').files[0];if(!f)throw Error('Sertifika dosyası seçilmelidir.');const bytes=new Uint8Array(await f.arrayBuffer());let s='';for(let i=0;i<bytes.length;i+=32768)s+=String.fromCharCode(...bytes.slice(i,i+32768));const x=await json(api+'/admin/trusted-certificates',{method:'POST',headers:headers(),body:JSON.stringify({certificate:btoa(s),trustType:$('trustType').value,displayName:$('trustName').value,enabled:$('trustEnabled').checked})});log(x);await loadTrust()}catch(e){log(e.message)}};
+async function editTrust(id){const c=trustItems.find(x=>x.certificateId===id);if(!c)return;const name=prompt('Görünen ad',c.displayName);if(name===null)return;const enabled=confirm('Sertifika etkin olsun mu? Tamam=Etkin, İptal=Pasif');try{await json(api+'/admin/trusted-certificates/'+id,{method:'PUT',headers:headers(),body:JSON.stringify({trustType:c.trustType,displayName:name,enabled})});await loadTrust()}catch(e){log(e.message)}}
+async function deleteTrust(id){if(!confirm('Sertifika güven deposundan çıkarılsın mı?'))return;try{await json(api+'/admin/trusted-certificates/'+id,{method:'DELETE',headers:headers()});await loadTrust()}catch(e){log(e.message)}}
+
+async function loadTsa(){try{const x=await json(api+'/admin/tsa-profile',{headers:headers()});$('tsaProvider').value=x.providerId;$('tsaEndpoint').value=x.endpoint;$('tsaTimeout').value=x.requestTimeoutSeconds;$('tsaCredentialRef').value=x.credentialRef??'';$('tsaPolicyOid').value=x.archivePolicyOid??'';$('tsaEnabled').checked=x.enabled;$('tsaStatus').textContent=`Sürüm ${x.version} — kaynak ${x.source} — ${x.enabled?'Etkin':'Pasif'}`;log(x)}catch(e){$('tsaStatus').textContent=e.message;log(e.message)}}
+$('loadTsa').onclick=loadTsa;
+$('saveTsa').onclick=async()=>{try{const x=await json(api+'/admin/tsa-profile',{method:'PUT',headers:headers(),body:JSON.stringify({providerId:$('tsaProvider').value,endpoint:$('tsaEndpoint').value,requestTimeoutSeconds:Number($('tsaTimeout').value),credentialRef:$('tsaCredentialRef').value||null,archivePolicyOid:$('tsaPolicyOid').value||null,enabled:$('tsaEnabled').checked})});$('tsaStatus').textContent=`Yeni TSA sürümü ${x.version} kaydedildi.`;log(x)}catch(e){$('tsaStatus').textContent=e.message;log(e.message)}};
+
+const selectedPolicyMode=()=>document.querySelector('input[name="policyMode"]:checked').value;
+const signingCertValidity=()=>document.querySelector('input[name="signingCertValidity"]:checked').value==='true';
+function syncPolicies(){const m=selectedPolicyMode(),custom=m==='CUSTOM';[$('qcPolicy'),$('certificatePolicy'),$('revocationPolicy'),$('signaturePolicy'),$('signingCertValidityActive'),$('signingCertValidityPassive')].forEach(x=>x.disabled=!custom);if(m==='STRICT'){[$('qcPolicy'),$('certificatePolicy'),$('revocationPolicy'),$('signaturePolicy')].forEach(x=>x.checked=true);$('signingCertValidityActive').checked=true}if(m==='AUDIT_ONLY'){[$('qcPolicy'),$('certificatePolicy'),$('revocationPolicy'),$('signaturePolicy')].forEach(x=>x.checked=false);$('signingCertValidityPassive').checked=true}}
+document.querySelectorAll('input[name="policyMode"]').forEach(x=>x.onchange=syncPolicies);
+async function loadPolicy(){try{const x=await json(api+'/admin/validation-policy',{headers:headers()});document.querySelector(`input[name="policyMode"][value="${x.mode}"]`).checked=true;$('qcPolicy').checked=x.qcComplianceActive;$('certificatePolicy').checked=x.certificatePolicyActive;$('revocationPolicy').checked=x.revocationActive;$('signaturePolicy').checked=x.signaturePolicyActive;$(x.signingCertificateValidityActive?'signingCertValidityActive':'signingCertValidityPassive').checked=true;$('auditOnlyMode').disabled=!x.auditOnlyAllowed;$('customPolicyMode').disabled=!x.policyCustomizationAllowed;syncPolicies();$('policyStatus').textContent=`Sürüm ${x.version}; mod ${x.mode}\nKapatılamayanlar: ${x.mandatoryPolicies.join(', ')}`;log(x)}catch(e){$('policyStatus').textContent=e.message;log(e.message)}}
+$('loadPolicy').onclick=loadPolicy;
+$('savePolicy').onclick=async()=>{try{const x=await json(api+'/admin/validation-policy',{method:'PUT',headers:headers(),body:JSON.stringify({mode:selectedPolicyMode(),qcComplianceActive:$('qcPolicy').checked,certificatePolicyActive:$('certificatePolicy').checked,revocationActive:$('revocationPolicy').checked,signaturePolicyActive:$('signaturePolicy').checked,signingCertificateValidityActive:signingCertValidity()})});$('policyStatus').textContent=`Sürüm ${x.version}; mod ${x.mode}`;log(x)}catch(e){$('policyStatus').textContent=e.message;log(e.message)}};
+
+loadCardCatalog();loadServers();loadTrust();loadTsa();loadPolicy();
+</script>
+</body>
+</html>

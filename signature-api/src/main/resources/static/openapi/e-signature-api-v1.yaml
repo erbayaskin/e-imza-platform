@@ -1,0 +1,1222 @@
+openapi: 3.1.0
+info:
+  title: E-İmza API
+  version: 0.1.0
+  description: |
+    Türkiye elektronik imza profilleri için imzalama ve doğrulama API sözleşmesi.
+    Faz 7 itibarıyla CAdES B-T, B-LT ve B-LTA üretim/yükseltme,
+    arşiv zaman damgası yenileme ve X.509 doğrulama uçları gerçeklenmiştir.
+servers:
+  - url: /api/v1
+security:
+  - oauth2:
+      - eimza.sign
+      - eimza.validate
+tags:
+  - name: Signing Sessions
+  - name: Validations
+  - name: Long Term Signatures
+  - name: Trusted Certificates
+  - name: Validation Policy Administration
+paths:
+  /signing-sessions:
+    post:
+      tags: [Signing Sessions]
+      operationId: createSigningSession
+      summary: İmzalama oturumu oluşturur
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSigningSessionRequest"
+      responses:
+        "201":
+          description: Oturum oluşturuldu
+          headers:
+            X-Correlation-Id:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SigningSession"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+  /signing-sessions/{sessionId}:
+    get:
+      tags: [Signing Sessions]
+      operationId: getSigningSession
+      summary: İmzalama oturumunu getirir
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: Oturum
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SigningSession"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /signing-sessions/{sessionId}/cancel:
+    post:
+      tags: [Signing Sessions]
+      operationId: cancelSigningSession
+      summary: Terminal durumda olmayan oturumu iptal eder
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/CorrelationId"
+      responses:
+        "200":
+          description: İptal edilmiş oturum
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SigningSession"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /signing-sessions/{sessionId}/manifest:
+    post:
+      tags: [Signing Sessions]
+      operationId: prepareSigningManifest
+      summary: Formata özgü imzalanacak veriyi hazırlar ve Ed25519 manifesti üretir
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PrepareSigningManifestRequest"}
+      responses:
+        "200": {description: Yerel ajana gönderilecek imzalı manifest}
+  /signing-sessions/{sessionId}/agent-connected:
+    post:
+      tags: [Signing Sessions]
+      operationId: acknowledgeAgentConnection
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "200": {description: Oturum güncellendi}
+  /signing-sessions/{sessionId}/approve:
+    post:
+      tags: [Signing Sessions]
+      operationId: approveSigningSession
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "200": {description: Kart imzalama başlatıldı}
+  /signing-sessions/{sessionId}/complete:
+    post:
+      tags: [Signing Sessions]
+      operationId: completeSigningSession
+      summary: Ham kart imzasını doğrular ve CAdES/XAdES/PAdES çıktısını üretir
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/CompleteSigningSessionRequest"}
+      responses:
+        "200":
+          description: Tamamlanmış imza çıktısı
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SignatureArtifact"}
+  /signing-sessions/{sessionId}/artifact:
+    get:
+      tags: [Signing Sessions]
+      operationId: getSignatureArtifact
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "200":
+          description: İmza çıktısı
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SignatureArtifact"}
+  /signing-sessions/{sessionId}/server-sign:
+    post:
+      tags: [Signing Sessions]
+      operationId: executeServerSideSigning
+      summary: Yönetici tanımlı HSM veya sunucu akıllı kartıyla imzalar
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pin:
+                  type: [string, "null"]
+                  maxLength: 128
+                  description: Yalnız sunucu akıllı kartı için tek kullanımlık PIN; HSM'de boş
+      responses:
+        "200":
+          description: Tamamlanmış CAdES/XAdES/PAdES çıktısı
+  /admin/client-devices:
+    post:
+      tags: [Client Devices]
+      operationId: registerClientDevice
+      summary: Client-side ajanın UUID ve Ed25519 açık anahtarını tenant'a kaydeder
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deviceId, displayName, publicKey]
+              properties:
+                deviceId: {type: string, format: uuid}
+                displayName: {type: string, maxLength: 200}
+                publicKey: {type: string, contentEncoding: base64}
+      responses:
+        "201": {description: Cihaz kaydedildi}
+  /admin/trusted-certificates:
+    get:
+      tags: [Trusted Certificates]
+      operationId: getCurrentTrustStore
+      summary: Güncel güvenilir kök/alt kök sertifika deposunu getirir
+      security:
+        - oauth2: [eimza.admin]
+      responses:
+        "200":
+          description: Güncel immutable güven deposu sürümü
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustStoreSnapshot"
+    post:
+      tags: [Trusted Certificates]
+      operationId: addTrustedCertificate
+      summary: CA sertifikasını ekleyerek yeni güven deposu sürümü yayımlar
+      security:
+        - oauth2: [eimza.admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTrustedCertificateRequest"
+      responses:
+        "201":
+          description: Yeni güven deposu sürümü
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustStoreSnapshot"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /admin/trusted-certificates/{certificateId}:
+    put:
+      tags: [Trusted Certificates]
+      operationId: updateTrustedCertificate
+      summary: Sertifika üyelik bilgisini güncelleyerek yeni sürüm yayımlar
+      description: Sertifika DER içeriği immutable'dır; yenileme için yeni sertifika eklenir.
+      security:
+        - oauth2: [eimza.admin]
+      parameters:
+        - $ref: "#/components/parameters/CertificateId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTrustedCertificateRequest"
+      responses:
+        "200":
+          description: Yeni güven deposu sürümü
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustStoreSnapshot"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Trusted Certificates]
+      operationId: removeTrustedCertificate
+      summary: Sertifikayı yeni sürümden çıkarır; tarihsel kayıtları fiziksel olarak silmez
+      security:
+        - oauth2: [eimza.admin]
+      parameters:
+        - $ref: "#/components/parameters/CertificateId"
+      responses:
+        "200":
+          description: Sertifikanın çıkarıldığı yeni güven deposu sürümü
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustStoreSnapshot"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /admin/trusted-certificates/versions/{versionId}:
+    get:
+      tags: [Trusted Certificates]
+      operationId: getTrustStoreVersion
+      summary: Tarihsel güven deposu sürümünü getirir
+      security:
+        - oauth2: [eimza.admin]
+      parameters:
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Tarihsel sürüm
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustStoreSnapshot"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /signatures/cades/augmentations:
+    post:
+      tags: [Long Term Signatures]
+      operationId: augmentCadesSignature
+      summary: CAdES imzasını B-LT/B-LTA seviyesine yükseltir veya arşiv zaman damgasını yeniler
+      security:
+        - oauth2: [eimza.sign]
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LongTermAugmentationRequest"
+      responses:
+        "200":
+          description: Yükseltilmiş CAdES ve denetim kimliği
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LongTermAugmentationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          description: İmza veya doğrulama materyali hedef seviye için uygun değil
+        "503":
+          description: B-LTA için TSA yapılandırılmamış veya kullanılamıyor
+  /validations/signatures:
+    post:
+      tags: [Validations]
+      operationId: validateSignature
+      summary: CAdES, XAdES veya PAdES imzasını ve imzalayan sertifikayı doğrular
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignatureValidationRequest"
+      responses:
+        "200":
+          description: Ayrıntılı doğrulama raporu
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationReport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /validations/certificates:
+    post:
+      tags: [Validations]
+      operationId: validateCertificate
+      summary: Sertifikayı teknik ve Türkiye NES uygunluğu açısından doğrular
+      parameters:
+        - $ref: "#/components/parameters/CorrelationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CertificateValidationRequest"
+      responses:
+        "200":
+          description: Ayrıntılı doğrulama raporu
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationReport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /admin/validation-policy:
+    get:
+      tags: [Validation Policy Administration]
+      operationId: getValidationPolicyConfiguration
+      summary: Etkin doğrulama politikası sürümünü getirir
+      security:
+        - oauth2: [eimza.admin]
+      responses:
+        "200":
+          description: Etkin politika yapılandırması
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationPolicyConfiguration"
+    put:
+      tags: [Validation Policy Administration]
+      operationId: updateValidationPolicyConfiguration
+      summary: Yeni bir doğrulama politikası sürümü yayımlar
+      security:
+        - oauth2: [eimza.admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateValidationPolicyConfiguration"
+      responses:
+        "200":
+          description: Yayımlanan politika sürümü
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationPolicyConfiguration"
+        "422":
+          description: AUDIT_ONLY local/test dışındaki bir ortamda istendi
+  /admin/card-profile-catalog:
+    get:
+      tags: [Validation Policy Administration]
+      operationId: listCardProfileTemplates
+      summary: ATR ve PKCS#11 bilgileri hazır akıllı kart profil kataloğunu listeler
+      security:
+        - oauth2: [eimza.admin]
+      responses:
+        "200":
+          description: Hazır akıllı kart profilleri
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CardProfileTemplate"
+  /admin/card-profile-catalog/detected-cards:
+    get:
+      tags: [Validation Policy Administration]
+      operationId: detectSmartCards
+      summary: Sunucuya takılı kartların ATR değerini okuyup katalogla eşleştirir
+      security:
+        - oauth2: [eimza.admin]
+      responses:
+        "200":
+          description: Okuyucu, ATR ve katalog eşleşmeleri
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DetectedSmartCard"
+  /admin/server-key-profiles:
+    get:
+      tags: [Validation Policy Administration]
+      operationId: listServerKeyProfiles
+      summary: Server-side akıllı kart ve HSM profillerini listeler
+      security:
+        - oauth2: [eimza.admin]
+      responses:
+        "200":
+          description: Server key profilleri
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServerKeyProfile"
+    post:
+      tags: [Validation Policy Administration]
+      operationId: createServerKeyProfile
+      summary: Sunucu tarafından UUID serverKeyId üreterek profil oluşturur
+      security:
+        - oauth2: [eimza.admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerKeyProfileInput"
+      responses:
+        "201":
+          description: Profil oluşturuldu
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerKeyProfile"
+  /admin/server-key-profiles/{id}:
+    put:
+      tags: [Validation Policy Administration]
+      operationId: updateServerKeyProfile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerKeyProfileInput"
+      responses:
+        "200":
+          description: Profil güncellendi
+    delete:
+      tags: [Validation Policy Administration]
+      operationId: deleteServerKeyProfile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        "204":
+          description: Profil silindi
+  /admin/tsa-profile:
+    get:
+      tags: [Validation Policy Administration]
+      operationId: getTsaProfile
+      summary: Etkin TSA profilini getirir
+      security:
+        - oauth2: [eimza.admin]
+      responses:
+        "200":
+          description: TSA profili
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TsaProfile"
+    put:
+      tags: [Validation Policy Administration]
+      operationId: updateTsaProfile
+      summary: Yeni sürümlü TSA profili yayımlar
+      security:
+        - oauth2: [eimza.admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TsaProfileInput"
+      responses:
+        "200":
+          description: TSA profili yayımlandı
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TsaProfile"
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://identity.example.invalid/oauth2/authorize
+          tokenUrl: https://identity.example.invalid/oauth2/token
+          scopes:
+            eimza.sign: İmzalama oturumu yönetimi
+            eimza.validate: İmza ve sertifika doğrulama
+            eimza.admin: Cihaz, politika, TSA ve güven deposu yönetimi
+  parameters:
+    TenantId:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      description: Faz 3'te açık başlık; üretimde doğrulanmış token claim'i ile eşleştirilir.
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 64
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CertificateId:
+      name: certificateId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  headers:
+    CorrelationId:
+      schema:
+        type: string
+  schemas:
+    CreateSigningSessionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - documentId
+        - documentDigest
+        - documentName
+        - mediaType
+        - size
+        - format
+        - targetLevel
+        - turkishProfile
+        - purpose
+        - signingMode
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        documentDigest:
+          $ref: "#/components/schemas/DocumentDigest"
+        documentName:
+          type: string
+          maxLength: 255
+        mediaType:
+          type: string
+          maxLength: 100
+        size:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 26214400
+        format:
+          $ref: "#/components/schemas/SignatureFormat"
+        targetLevel:
+          $ref: "#/components/schemas/SignatureLevel"
+        turkishProfile:
+          $ref: "#/components/schemas/TurkishSignatureProfile"
+        purpose:
+          type: string
+          maxLength: 250
+        signingMode:
+          type: string
+          enum: [CLIENT_SIDE, SERVER_SIDE]
+        deviceId:
+          type: [string, "null"]
+          format: uuid
+          description: CLIENT_SIDE için zorunlu
+        serverKeyId:
+          type: [string, "null"]
+          maxLength: 100
+          description: SERVER_SIDE için zorunlu
+        documentBase64:
+          type: string
+          contentEncoding: base64
+          description: PAdES, attached CAdES, enveloped/enveloping XAdES ve SHA-384/512 CAdES için zorunlu
+        signaturePackaging:
+          type: string
+          enum: [ATTACHED, DETACHED, ENVELOPED, ENVELOPING]
+          description: CAdES ATTACHED/DETACHED; XAdES ENVELOPED/ENVELOPING/DETACHED; PAdES ENVELOPED
+        signatureAlgorithm:
+          type: string
+          enum: [RSA_PKCS1_SHA256, RSA_PKCS1_SHA384, RSA_PKCS1_SHA512, ECDSA_SHA256, ECDSA_SHA384, ECDSA_SHA512]
+        multiSignatureType:
+          type: string
+          default: SINGLE
+          enum: [SINGLE, PARALLEL, SERIAL]
+          description: SINGLE ilk imza; PARALLEL bağımsız co-signature; SERIAL counter-signature veya PAdES incremental approval
+        existingArtifactBase64:
+          type: string
+          contentEncoding: base64
+          description: PARALLEL/SERIAL için zorunlu önceki CAdES, XAdES veya PAdES artifact'i
+        targetSignatureIndex:
+          type: integer
+          minimum: 0
+          default: 0
+          description: SERIAL CAdES/XAdES için 0 tabanlı hedef imza indeksi
+    PrepareSigningManifestRequest:
+      type: object
+      required: [readerId, certificateFingerprint, certificateBase64, signatureAlgorithm]
+      properties:
+        readerId: {type: string, maxLength: 300}
+        certificateFingerprint: {type: string, maxLength: 64}
+        certificateBase64: {type: string, contentEncoding: base64}
+        signatureAlgorithm:
+          type: string
+          enum: [RSA_PKCS1_SHA256, RSA_PKCS1_SHA384, RSA_PKCS1_SHA512, ECDSA_SHA256, ECDSA_SHA384, ECDSA_SHA512]
+    CompleteSigningSessionRequest:
+      type: object
+      required: [signature, deviceSignature]
+      properties:
+        signature: {type: string, contentEncoding: base64url}
+        deviceSignature: {type: string, contentEncoding: base64url}
+    SignatureArtifact:
+      type: object
+      required: [artifactId, format, level, mediaType, sha256, artifactBase64]
+      properties:
+        artifactId: {type: string, format: uuid}
+        format: {$ref: "#/components/schemas/SignatureFormat"}
+        level: {$ref: "#/components/schemas/SignatureLevel"}
+        mediaType: {type: string}
+        sha256: {type: string}
+        artifactBase64: {type: string, contentEncoding: base64}
+    DocumentDigest:
+      type: object
+      additionalProperties: false
+      required: [algorithm, value]
+      properties:
+        algorithm:
+          type: string
+          enum: [SHA-256]
+        value:
+          type: string
+          contentEncoding: base64url
+          maxLength: 128
+    CreateTrustedCertificateRequest:
+      type: object
+      additionalProperties: false
+      required: [certificate, trustType, displayName, enabled]
+      properties:
+        certificate:
+          type: string
+          description: PEM veya Base64 kodlu DER X.509 CA sertifikası
+        trustType:
+          $ref: "#/components/schemas/TrustedCertificateType"
+        displayName:
+          type: string
+          maxLength: 250
+        enabled:
+          type: boolean
+    UpdateTrustedCertificateRequest:
+      type: object
+      additionalProperties: false
+      required: [trustType, displayName, enabled]
+      properties:
+        trustType:
+          $ref: "#/components/schemas/TrustedCertificateType"
+        displayName:
+          type: string
+          maxLength: 250
+        enabled:
+          type: boolean
+    TrustStoreSnapshot:
+      type: object
+      required: [certificates]
+      properties:
+        version:
+          type: [string, "null"]
+        contentDigest:
+          type: [string, "null"]
+        validFrom:
+          type: [string, "null"]
+          format: date-time
+        validUntil:
+          type: [string, "null"]
+          format: date-time
+        certificates:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrustedCertificate"
+    TrustedCertificate:
+      type: object
+      required:
+        - certificateId
+        - fingerprintSha256
+        - subjectDn
+        - issuerDn
+        - serialNumberHex
+        - notBefore
+        - notAfter
+        - trustType
+        - displayName
+        - enabled
+      properties:
+        certificateId:
+          type: string
+          format: uuid
+        fingerprintSha256:
+          type: string
+        subjectDn:
+          type: string
+        issuerDn:
+          type: string
+        serialNumberHex:
+          type: string
+        notBefore:
+          type: string
+          format: date-time
+        notAfter:
+          type: string
+          format: date-time
+        trustType:
+          $ref: "#/components/schemas/TrustedCertificateType"
+        displayName:
+          type: string
+        enabled:
+          type: boolean
+    TrustedCertificateType:
+      type: string
+      enum: [ROOT, INTERMEDIATE]
+    SigningSession:
+      type: object
+      required:
+        - sessionId
+        - status
+        - format
+        - targetLevel
+        - turkishProfile
+        - expiresAt
+        - createdAt
+        - manifestStatus
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/SigningSessionStatus"
+        format:
+          $ref: "#/components/schemas/SignatureFormat"
+        signaturePackaging:
+          type: string
+          enum: [ATTACHED, DETACHED, ENVELOPED, ENVELOPING]
+        signatureAlgorithm:
+          type: [string, "null"]
+          enum: [RSA_PKCS1_SHA256, RSA_PKCS1_SHA384, RSA_PKCS1_SHA512, ECDSA_SHA256, ECDSA_SHA384, ECDSA_SHA512, null]
+        multiSignatureType:
+          type: string
+          enum: [SINGLE, PARALLEL, SERIAL]
+        targetSignatureIndex:
+          type: integer
+          minimum: 0
+        targetLevel:
+          $ref: "#/components/schemas/SignatureLevel"
+        turkishProfile:
+          $ref: "#/components/schemas/TurkishSignatureProfile"
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        manifestStatus:
+          type: string
+    CertificateValidationRequest:
+      type: object
+      additionalProperties: false
+      required: [certificate]
+      properties:
+        certificate:
+          type: string
+          contentEncoding: base64
+          description: DER X.509 sertifikası
+        intermediateCertificates:
+          type: array
+          items:
+            type: string
+            contentEncoding: base64
+        validationTime:
+          type: [string, "null"]
+          format: date-time
+    SignatureValidationRequest:
+      type: object
+      additionalProperties: false
+      required: [signature]
+      properties:
+        format:
+          type: string
+          enum: [CADES, XADES, PADES]
+          default: CADES
+        signaturePackaging:
+          type: string
+          enum: [AUTO, ATTACHED, DETACHED, ENVELOPED, ENVELOPING]
+          default: AUTO
+        content:
+          type: [string, "null"]
+          contentEncoding: base64
+          description: Detached CAdES/XAdES için zorunlu; attached/enveloped/enveloping ve PAdES için kullanılmaz
+        signature:
+          type: string
+          contentEncoding: base64
+          description: DER CAdES, XML XAdES veya imzalı PDF
+        validationTime:
+          type: [string, "null"]
+          format: date-time
+    LongTermAugmentationRequest:
+      type: object
+      additionalProperties: false
+      required: [signature, target]
+      properties:
+        signature:
+          type: string
+          contentEncoding: base64
+          description: Kaynak DER CAdES B-T, B-LT veya B-LTA imzası
+        content:
+          type: [string, "null"]
+          contentEncoding: base64
+          description: B-LTA ve yenileme için zorunlu ayrık özgün içerik
+        target:
+          type: string
+          enum: [B_LT, B_LTA, RENEW_B_LTA]
+        certificates:
+          type: array
+          description: B-LT için kullanılan tam X.509 doğrulama zinciri
+          items:
+            type: string
+            contentEncoding: base64
+        revocationValues:
+          type: array
+          items:
+            $ref: "#/components/schemas/LongTermRevocationValue"
+        timestampPolicyOid:
+          type: [string, "null"]
+          description: Boşsa sunucunun sürümlü arşiv TSA politikası kullanılır
+    LongTermRevocationValue:
+      type: object
+      additionalProperties: false
+      required: [type, value]
+      properties:
+        type:
+          type: string
+          enum: [CRL, OCSP]
+        value:
+          type: string
+          contentEncoding: base64
+          description: DER SİL veya RFC 6960 OCSPResponse
+    LongTermAugmentationResponse:
+      type: object
+      required:
+        - augmentationId
+        - signature
+        - level
+        - sourceDigest
+        - resultDigest
+        - certificateCount
+        - revocationValueCount
+        - archiveTimestampCount
+      properties:
+        augmentationId:
+          type: string
+          format: uuid
+        signature:
+          type: string
+          contentEncoding: base64
+        level:
+          type: string
+          enum: [B-LT, B-LTA]
+        sourceDigest:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+        resultDigest:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+        certificateCount:
+          type: integer
+          minimum: 1
+        revocationValueCount:
+          type: integer
+          minimum: 1
+        archiveTimestampCount:
+          type: integer
+          minimum: 0
+        archiveTimestampGenerationTime:
+          type: [string, "null"]
+          format: date-time
+        archiveTimestampPolicyOid:
+          type: [string, "null"]
+    ValidationReport:
+      type: object
+      required:
+        - validationId
+        - targetType
+        - mainIndication
+        - cryptographicValidity
+        - turkishQualifiedSignatureCompliance
+        - validationTime
+        - policyVersion
+        - policyMode
+        - passivePolicies
+        - trustStoreVersion
+        - certificationPath
+        - checks
+        - summary
+      properties:
+        validationId:
+          type: string
+          format: uuid
+        targetType:
+          type: string
+          enum: [CERTIFICATE, SIGNATURE]
+        mainIndication:
+          $ref: "#/components/schemas/ValidationIndication"
+        cryptographicValidity:
+          $ref: "#/components/schemas/ValidationIndication"
+        turkishQualifiedSignatureCompliance:
+          $ref: "#/components/schemas/ValidationIndication"
+        validationTime:
+          type: string
+          format: date-time
+        policyVersion:
+          type: string
+        policyMode:
+          type: string
+          enum: [STRICT, CUSTOM, AUDIT_ONLY]
+        passivePolicies:
+          type: array
+          items:
+            type: string
+        trustStoreVersion:
+          type: string
+        detectedFormat:
+          type: [string, "null"]
+        detectedLevel:
+          type: [string, "null"]
+        certificationPath:
+          type: array
+          items:
+            type: string
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationCheck"
+        summary:
+          type: string
+    UpdateValidationPolicyConfiguration:
+      type: object
+      required:
+        - mode
+        - qcComplianceActive
+        - certificatePolicyActive
+        - revocationActive
+        - signaturePolicyActive
+        - signingCertificateValidityActive
+      properties:
+        mode:
+          type: string
+          enum: [STRICT, CUSTOM, AUDIT_ONLY]
+        qcComplianceActive:
+          type: boolean
+        certificatePolicyActive:
+          type: boolean
+        revocationActive:
+          type: boolean
+        signaturePolicyActive:
+          type: boolean
+        signingCertificateValidityActive:
+          type: boolean
+          description: Local/test ortamında süresi dolmuş kartla kriptografik test için pasifleştirilebilir; production ortamında zorunlu aktiftir.
+    ValidationPolicyConfiguration:
+      allOf:
+        - $ref: "#/components/schemas/UpdateValidationPolicyConfiguration"
+        - type: object
+          required: [version, auditOnlyAllowed, policyCustomizationAllowed, mandatoryPolicies, createdAt]
+          properties:
+            version:
+              type: integer
+              format: int64
+            auditOnlyAllowed:
+              type: boolean
+            policyCustomizationAllowed:
+              type: boolean
+            mandatoryPolicies:
+              type: array
+              items:
+                type: string
+            createdAt:
+              type: string
+              format: date-time
+    CardProfileTemplate:
+      type: object
+      required: [id, displayName, vendor, deviceType, allowedMechanisms, description]
+      properties:
+        id: {type: string}
+        displayName: {type: string}
+        vendor: {type: string}
+        deviceType: {type: string, enum: [SMART_CARD]}
+        atr: {type: [string, "null"]}
+        atrMask: {type: [string, "null"]}
+        defaultPkcs11Library: {type: [string, "null"]}
+        allowedMechanisms:
+          type: array
+          items: {type: string}
+        description: {type: string}
+    DetectedSmartCard:
+      type: object
+      required: [cardPresent, status]
+      properties:
+        readerName: {type: [string, "null"]}
+        cardPresent: {type: boolean}
+        atr: {type: [string, "null"]}
+        matchedTemplateId: {type: [string, "null"]}
+        matchedTemplateName: {type: [string, "null"]}
+        status: {type: string}
+    ServerKeyProfileInput:
+      type: object
+      required: [displayName, deviceType, pkcs11Library, allowedTenantIds, enabled]
+      properties:
+        displayName: {type: string, maxLength: 250}
+        deviceType: {type: string, enum: [SMART_CARD, HSM]}
+        pkcs11Library: {type: string, maxLength: 1000}
+        slotListIndex: {type: [integer, "null"], minimum: 0}
+        atr: {type: [string, "null"]}
+        atrMask: {type: [string, "null"]}
+        certificateFingerprint: {type: [string, "null"]}
+        credentialRef: {type: [string, "null"]}
+        allowedTenantIds:
+          type: array
+          items: {type: string, format: uuid}
+        enabled: {type: boolean}
+    ServerKeyProfile:
+      allOf:
+        - $ref: "#/components/schemas/ServerKeyProfileInput"
+        - type: object
+          required: [id, serverKeyId, createdAt, updatedAt]
+          properties:
+            id: {type: string, format: uuid}
+            serverKeyId: {type: string, format: uuid}
+            createdAt: {type: string, format: date-time}
+            updatedAt: {type: string, format: date-time}
+    TsaProfileInput:
+      type: object
+      required: [providerId, endpoint, requestTimeoutSeconds, enabled]
+      properties:
+        providerId: {type: string}
+        endpoint: {type: string, format: uri}
+        requestTimeoutSeconds: {type: integer, minimum: 1, maximum: 120}
+        credentialRef: {type: [string, "null"]}
+        archivePolicyOid: {type: [string, "null"]}
+        enabled: {type: boolean}
+    TsaProfile:
+      allOf:
+        - $ref: "#/components/schemas/TsaProfileInput"
+        - type: object
+          required: [version, createdAt, source]
+          properties:
+            version: {type: integer, format: int64}
+            createdAt: {type: string, format: date-time}
+            source: {type: string, enum: [DATABASE, APPLICATION_CONFIGURATION]}
+    ValidationCheck:
+      type: object
+      required: [code, indication, message, details]
+      properties:
+        code:
+          type: string
+        indication:
+          $ref: "#/components/schemas/ValidationIndication"
+        message:
+          type: string
+        evidenceDigest:
+          type: [string, "null"]
+        details:
+          type: object
+          additionalProperties:
+            type: string
+    SignatureFormat:
+      type: string
+      enum: [CADES, XADES, PADES]
+    SignatureLevel:
+      type: string
+      enum: [B_B, B_T, B_LT, B_LTA]
+    TurkishSignatureProfile:
+      type: string
+      enum: [P1, P2, P3, P4]
+    ValidationIndication:
+      type: string
+      enum: [VALID, INVALID, INDETERMINATE]
+    SigningSessionStatus:
+      type: string
+      enum:
+        - CREATED
+        - MANIFEST_ISSUED
+        - AGENT_CONNECTED
+        - USER_APPROVAL_PENDING
+        - CARD_SIGNING
+        - SIGNATURE_RECEIVED
+        - VALIDATING
+        - TIMESTAMPING
+        - PROVISIONALLY_COMPLETED
+        - FINALIZING
+        - COMPLETED
+        - FAILED
+        - CANCELLED
+        - EXPIRED
+        - USER_REJECTED
+    Problem:
+      type: object
+      required: [type, title, status, code, correlationId, retryable, timestamp]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        code:
+          type: string
+        correlationId:
+          type: string
+        retryable:
+          type: boolean
+        timestamp:
+          type: string
+          format: date-time
+  responses:
+    BadRequest:
+      description: Geçersiz istek
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Kaynak bulunamadı
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: Kaynak durumu veya idempotency çakışması
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    UnprocessableEntity:
+      description: Politika ihlali
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"

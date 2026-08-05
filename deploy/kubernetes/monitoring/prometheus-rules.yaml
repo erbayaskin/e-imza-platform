@@ -1,0 +1,95 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: eimza-api
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: eimza-api-availability
+      rules:
+        - alert: EImzaApiUnavailable
+          expr: sum(up{namespace="eimza",service="eimza-api"}) < 1
+          for: 2m
+          labels:
+            severity: critical
+            service: eimza-api
+          annotations:
+            summary: E-İmza API erişilemiyor
+            runbook_url: ops/runbooks/ALARM_MUDAHALE.md#eimzaapiunavailable
+        - alert: EImzaApiRedundancyLost
+          expr: sum(up{namespace="eimza",service="eimza-api"}) < 2
+          for: 5m
+          labels:
+            severity: warning
+            service: eimza-api
+          annotations:
+            summary: E-İmza API yedekliliği kayboldu
+            runbook_url: ops/runbooks/ALARM_MUDAHALE.md#eimzaapiredundancylost
+        - alert: EImzaApiHighErrorRate
+          expr: |
+            sum(rate(http_server_requests_seconds_count{namespace="eimza",status=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(http_server_requests_seconds_count{namespace="eimza"}[5m])), 0.001)
+            > 0.01
+          for: 10m
+          labels:
+            severity: critical
+            service: eimza-api
+          annotations:
+            summary: E-İmza API 5xx oranı yüzde 1 üzerinde
+            runbook_url: ops/runbooks/ALARM_MUDAHALE.md#eimzaapihigherrorrate
+        - alert: EImzaApiHighP95Latency
+          expr: |
+            histogram_quantile(
+              0.95,
+              sum by (le) (
+                rate(http_server_requests_seconds_bucket{
+                  namespace="eimza",uri!~"/actuator.*"
+                }[5m])
+              )
+            ) > 2
+          for: 10m
+          labels:
+            severity: warning
+            service: eimza-api
+          annotations:
+            summary: E-İmza API p95 gecikmesi 2 saniye üzerinde
+            runbook_url: ops/runbooks/ALARM_MUDAHALE.md#eimzaapihighp95latency
+    - name: eimza-api-capacity
+      rules:
+        - alert: EImzaApiJvmHeapPressure
+          expr: |
+            sum by (pod) (jvm_memory_used_bytes{namespace="eimza",area="heap"})
+            /
+            sum by (pod) (jvm_memory_max_bytes{namespace="eimza",area="heap"})
+            > 0.85
+          for: 10m
+          labels:
+            severity: warning
+            service: eimza-api
+          annotations:
+            summary: E-İmza API JVM heap kullanımı yüzde 85 üzerinde
+            runbook_url: ops/runbooks/ALARM_MUDAHALE.md#eimzaapijvmheappressure
+        - alert: EImzaApiDatabasePoolPressure
+          expr: |
+            hikaricp_connections_active{namespace="eimza"}
+            /
+            clamp_min(hikaricp_connections_max{namespace="eimza"}, 1)
+            > 0.80
+          for: 10m
+          labels:
+            severity: warning
+            service: eimza-api
+          annotations:
+            summary: E-İmza API veritabanı havuzu yüzde 80 üzerinde
+            runbook_url: ops/runbooks/ALARM_MUDAHALE.md#eimzaapidatabasepoolpressure
+        - alert: EImzaApiPodRestarting
+          expr: increase(kube_pod_container_status_restarts_total{namespace="eimza",container="api"}[15m]) > 2
+          for: 5m
+          labels:
+            severity: warning
+            service: eimza-api
+          annotations:
+            summary: E-İmza API pod'u sık yeniden başlıyor
+            runbook_url: ops/runbooks/ALARM_MUDAHALE.md#eimzaapipodrestarting

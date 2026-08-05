@@ -1,0 +1,19 @@
+eimza:
+  agent:
+    # Kurulumda benzersiz UUID ve manifest public key ortam değişkenleriyle verilmelidir.
+    card-profiles:
+      - id: akis-kart
+        display-name: AKİS Akıllı Kart
+        device-type: SMART_CARD
+        atr: "3B9F978131FE4580655443D3228231C073F621808105D3"
+        atr-mask: "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+        pkcs11-library: "C:/Windows/System32/akisp11.dll"
+        auto-discover-slot: true
+        # Otomatik keşif etkin olduğunda yalnız middleware fallback değeridir.
+        slot-list-index: 0
+        allowed-mechanisms:
+          - RSA_PKCS1_SHA256
+          - RSA_PKCS1_SHA384
+          - RSA_PKCS1_SHA512
+
+    # HSM burada tanımlanmaz; client-side agent yalnız akıllı kart destekler.

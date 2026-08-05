@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: eimza-api
+spec:
+  tls:
+    - hosts:
+        - eimza.example.invalid
+      secretName: eimza-api-tls
+  rules:
+    - host: eimza.example.invalid
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: eimza-api
+                port:
+                  name: http

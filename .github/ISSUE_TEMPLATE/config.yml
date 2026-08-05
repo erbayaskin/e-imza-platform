@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Güvenlik açığını özel bildir
+    url: https://github.com/erbayaskin/e-imza-platform/security/advisories/new
+    about: Güvenlik ayrıntılarını public issue içine yazmayın.
+  - name: Entegrasyon ve kullanım sorusu
+    url: https://github.com/erbayaskin/e-imza-platform/discussions
+    about: Kurulum, entegrasyon ve kullanım soruları için Discussions bölümünü kullanın.

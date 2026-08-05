@@ -1,0 +1,82 @@
+name: Hata bildirimi
+description: Tekrarlanabilir bir yazılım hatasını bildirin
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Güvenlik açığı olabilecek ayrıntıları burada paylaşmayın. Bunun yerine SECURITY.md
+        içindeki Private Vulnerability Reporting kanalını kullanın. PIN, özel anahtar, token,
+        gerçek sertifika/kişisel veri ve üretim endpoint'i eklemeyin.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Ön kontrol
+      options:
+        - label: Bunun bir güvenlik açığı olmadığını kontrol ettim.
+          required: true
+        - label: Mevcut issue'larda aynı hatayı aradım.
+          required: true
+        - label: Paylaştığım bütün verileri maskeledim veya sentetikleştirdim.
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: Sürüm veya commit
+      placeholder: 0.1.0-SNAPSHOT veya commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: Etkilenen bileşen
+      options:
+        - signature-core
+        - certificate-validation
+        - timestamp-client
+        - signature-cades
+        - signature-xades
+        - signature-pades
+        - smartcard-agent
+        - desktop-signing-demo
+        - signature-api
+        - Dokümantasyon/CI/dağıtım
+        - Bilinmiyor
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Ortam
+      description: İşletim sistemi, Java/Maven, kart middleware veya HSM modeli; secret vermeyin.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Tekrar üretme adımları
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Beklenen davranış
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Gerçekleşen davranış
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Maskelenmiş kanıt
+      description: Correlation ID, stack trace veya sentetik örnek; secret ve kişisel veri vermeyin.

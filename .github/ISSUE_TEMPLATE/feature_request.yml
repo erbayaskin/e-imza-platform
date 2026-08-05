@@ -1,0 +1,47 @@
+name: Özellik önerisi
+description: Kapsamı ve kabul ölçütleri belirli bir geliştirme önerin
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Ön kontrol
+      options:
+        - label: Mevcut issue ve faz belgelerinde aynı öneriyi aradım.
+          required: true
+        - label: Güvenlik açığı ayrıntısı veya secret paylaşmıyorum.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Çözülecek problem
+      description: Kullanıcı/entegratör açısından ihtiyacı açıklayın.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Önerilen davranış
+    validations:
+      required: true
+  - type: textarea
+    id: standards
+    attributes:
+      label: Standart ve mevzuat etkisi
+      description: Varsa ETSI, RFC, BTK veya ESHS kaynağını ve sürüm/tarihini belirtin.
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Uyumluluk ve güvenlik etkisi
+      description: REST/Java API, DB, format, kart/HSM, tenant ve geriye uyumluluk etkileri.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Kabul ölçütleri
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true

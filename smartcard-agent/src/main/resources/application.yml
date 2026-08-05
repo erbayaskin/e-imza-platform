@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: e-imza-smartcard-agent
+  main:
+    headless: false
+server:
+  address: 127.0.0.1
+  port: 18443
+  shutdown: graceful
+  error:
+    include-message: never
+    include-stacktrace: never
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+eimza:
+  agent:
+    device-id: ${EIMZA_AGENT_DEVICE_ID:UNCONFIGURED}
+    device-private-key: ${EIMZA_AGENT_DEVICE_PRIVATE_KEY:}
+    device-public-key: ${EIMZA_AGENT_DEVICE_PUBLIC_KEY:}
+    manifest-public-key: ${EIMZA_AGENT_MANIFEST_PUBLIC_KEY:}
+    allowed-origins:
+      - ${EIMZA_AGENT_ALLOWED_ORIGIN:http://localhost:8080}
+    # Kart profilleri kurulum ortamında aşağıdaki şemayla tanımlanır.
+    # HTTP çağrısından PKCS#11 yolu veya ATR profili kabul edilmez.
+    card-profiles: []

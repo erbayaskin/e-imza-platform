@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eimza-api-config
+data:
+  SPRING_PROFILES_ACTIVE: prod
+  EIMZA_OIDC_AUDIENCE: eimza-api
+  EIMZA_OIDC_JWS_ALGORITHMS: RS256
+  EIMZA_TENANT_CLAIM: tenant_id
+  EIMZA_VALIDATION_POLICY_VERSION: turkiye-baseline-v1
+  EIMZA_TSA_ENABLED: "false"
+  JAVA_TOOL_OPTIONS: >-
+    -XX:MaxRAMPercentage=75
+    -XX:+ExitOnOutOfMemoryError
+    -Djava.io.tmpdir=/tmp

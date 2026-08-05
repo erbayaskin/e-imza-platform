@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: eimza-api
+spec:
+  selector:
+    app.kubernetes.io/name: eimza-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  type: ClusterIP

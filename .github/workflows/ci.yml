@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dco:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Verify DCO sign-offs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          failed=0
+          while IFS= read -r commit; do
+            if ! git show -s --format=%B "$commit" | grep -qiE '^Signed-off-by: .+ <[^>]+>$'; then
+              echo "::error::Commit $commit does not contain a valid Signed-off-by line."
+              failed=1
+            fi
+          done < <(git rev-list "${BASE_SHA}..${HEAD_SHA}")
+          exit "$failed"
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Verify
+        run: mvn --batch-mode --no-transfer-progress clean verify
+
+      - name: Generate CycloneDX SBOM
+        run: >-
+          mvn --batch-mode --no-transfer-progress
+          org.cyclonedx:cyclonedx-maven-plugin:2.9.2:makeAggregateBom
+          -DskipTests
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: |
+            **/target/surefire-reports/**
+            **/target/site/jacoco/**
+            target/bom.json
+            target/bom.xml
+          if-no-files-found: ignore
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: moderate
+          license-check: true
+          allow-licenses: >-
+            Apache-2.0, BSD-2-Clause, BSD-3-Clause, CC0-1.0, EPL-1.0, EPL-2.0,
+            GPL-2.0-with-classpath-exception, LGPL-2.1-only, LGPL-2.1-or-later, MIT, MPL-2.0
+          allow-dependencies-licenses: >-
+            pkg:maven/org.bouncycastle/bcprov-jdk18on,
+            pkg:maven/org.bouncycastle/bcpkix-jdk18on,
+            pkg:maven/org.bouncycastle/bcutil-jdk18on

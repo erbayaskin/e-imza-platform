@@ -1,0 +1,20 @@
+server:
+  address: 127.0.0.1
+  port: 18443
+eimza:
+  agent:
+    device-id: DEVICE_ENROLLMENT_SONRASI_DOLDUR
+    manifest-public-key: MERKEZI_MANIFEST_ACIK_ANAHTARI
+    allowed-origins:
+      - https://portal.example.invalid
+    card-profiles:
+      - id: KART_PROFILI_KIMLIGI
+        display-name: Kart modeli
+        device-type: SMART_CARD
+        atr: ATR_HEX
+        atr-mask:
+        pkcs11-library: C:/Program Files/Uretici/pkcs11.dll
+        auto-discover-slot: true
+        slot-list-index: 0
+        allowed-mechanisms:
+          - CKM_RSA_PKCS
