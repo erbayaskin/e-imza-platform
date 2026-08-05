@@ -2,8 +2,8 @@
 
 > Denetim tarihi: 5 Ağustos 2026  
 > Hedef: `https://github.com/erbayaskin/e-imza-platform`  
-> Sonuç: Public kaynak yayını için lisans ve yönetişim dosyaları hazır; GitHub repository'sinin
-> oluşturulması, güvenlik/branch ayarları ve ilk CI sonucu bekleniyor.
+> Sonuç: Public kaynak deposu oluşturuldu ve kaynak yayımlandı. Lisans/yönetişim, güvenlik
+> özellikleri, main dal koruması, CI, CodeQL ve resmî kaynak monitor doğrulandı.
 
 ## 1. Onaylanan kararlar
 
@@ -32,7 +32,7 @@ Bu kararların kaynak içindeki karşılıkları `LICENSE`, `NOTICE`, `DCO`, `GO
 
 ## 2. Teknik denetim sonucu
 
-- `D:\ErbayProject` henüz Git çalışma ağacı değildir; `.git` dizini ve `origin` yoktur.
+- D:\ErbayProject bir Git çalışma ağacıdır; main, origin ve public GitHub deposu doğrulandı.
 - `.gitignore` build çıktıları, yerel Maven deposu, runtime anahtarları, geçici dosyalar ve
   makineye özel `agent-local.yml` dosyasını hariç tutar.
 - `.gitattributes` satır sonlarını ve binary türlerini tanımlar.
@@ -42,23 +42,21 @@ Bu kararların kaynak içindeki karşılıkları `LICENSE`, `NOTICE`, `DCO`, `GO
 - Özel anahtar PEM işareti veya literal bearer token bulunmamıştır.
 - Örnek deployment secret dosyaları yalnız açık placeholder değerler içerir.
 - Test CA dosyası public sertifikadır; özel anahtar değildir.
-- 5 Ağustos 2026 tarihinde kök reaktörde `mvn verify` başarılıdır: dokuz modülde 85 test,
+- 5 Ağustos 2026 tarihinde kök reaktörde `mvn verify` başarılıdır: dokuz test modülünde 85 test,
   sıfır hata/başarısızlık.
-- CI, CodeQL, dependency review, DCO kontrolü, SBOM ve Dependabot yapılandırmaları kaynakta
-  hazırdır; gerçek GitHub repository'sinde henüz çalışmamıştır.
+- CI, CodeQL ve resmî kaynak monitor gerçek GitHub deposunda başarıyla çalıştı. Son CodeQL
+  taramasında açık uyarı yoktur; CI artifact paketi test raporları, JaCoCo ve CycloneDX SBOM içerir.
 - Aggregate SBOM'daki 121 bileşenin tamamında lisans metadata'sı vardır; alternatif/copy-left
   lisans bildiren sekiz bileşenin teknik değerlendirmesi `THIRD_PARTY_LICENSES.md` içindedir.
 
-## 3. Public yayın öncesi kalan kapılar
+## 3. Public kaynak yayını sonrası kalan kapılar
 
-### 3.1 Yerel Git ve GitHub
+### 3.1 GitHub üzerinde manuel doğrulanacak davranışlar
 
-- Repository public olarak oluşturulmalı ve ilk DCO sign-off'lu commit push edilmelidir.
-- İlk CI, CodeQL, DCO ve dependency review sonucu görülmelidir.
-- `main` ruleset gerçek check adlarıyla etkinleştirilmelidir.
-- Private Vulnerability Reporting, security notifications, Dependabot alerts ve mümkünse
-  secret scanning/push protection etkinleştirilmelidir.
-- Issues, Discussions, yalnız squash merge ve merge sonrası branch silme ayarlanmalıdır.
+- Hesap düzeyindeki security notification tercihi @erbayaskin tarafından arayüzde doğrulanır.
+- İlk gerçek katkı PR akışında DCO, dependency review, CODEOWNERS talebi ve bir-review kapısı sınanır.
+- CI artifact paketi kurumsal ağ dışından indirilerek arşiv içeriği ayrıca açılır; bu ağda GitHub
+  Azure artifact indirme adresi kurum politikasıyla engellenmiştir.
 
 Adım adım ve kanıt alanları için
 [GITHUB_PUBLICATION_CHECKLIST.md](GITHUB_PUBLICATION_CHECKLIST.md) kullanılır.
@@ -76,9 +74,9 @@ basılmadan önce yine de şu somut kontroller yapılır:
 
 Bu belge teknik yönetişim kaydıdır; bağımsız hukuk görüşünün yerine geçmez.
 
-## 4. Önerilen ilk Git adımları
+## 4. Tamamlanan ilk Git adımları
 
-Bu komutlar henüz çalıştırılmamıştır:
+Bu akış 5 Ağustos 2026 tarihinde tamamlanmıştır:
 
 ```powershell
 cd D:\ErbayProject
@@ -111,9 +109,9 @@ Kararlı ilk release için ayrıca:
 
 ## 6. Hazır olma beyanı
 
-Kaynak ağacında public lisans ve yönetişim kararları tamamlanmıştır. Proje, repository
-oluşturulup [GITHUB_PUBLICATION_CHECKLIST.md](GITHUB_PUBLICATION_CHECKLIST.md) içindeki GitHub
-ayarları ve ilk workflow sonuçları doğrulanmadan **public yayını tamamlanmış** sayılmaz.
+Kaynak ağacında public lisans ve yönetişim kararları tamamlanmış; repository, güvenlik ayarları,
+dal koruması ve ilk workflow sonuçları doğrulanmıştır. Açık kalan manuel/release maddeleri
+[GITHUB_PUBLICATION_CHECKLIST.md](GITHUB_PUBLICATION_CHECKLIST.md) içinde izlenir.
 
 Public kaynak yayın hazırlığı, Faz 12'deki fiziksel kart/HSM/canlı TSA-ESHS/yük/sızma/DR ve
 hukuki ürün kabulünün tamamlandığı anlamına gelmez.

@@ -14,6 +14,9 @@ Faz 1–11 için planlanan yazılım bileşenleri uygulanmıştır. Platform CAd
 imza üretir/doğrular; client-side akıllı kart, server-side akıllı kart/HSM, güven deposu,
 TSA, politika yönetimi, offline masaüstü ve çoklu imza akışlarını içerir.
 
+Public kaynak kodu [erbayaskin/e-imza-platform](https://github.com/erbayaskin/e-imza-platform)
+deposunda Apache-2.0 ile yayımlanmıştır.
+
 Bu durum “Türkiye'de her ortamda hukuken kabul edilmiş üretim hizmeti” anlamına gelmez.
 Canlı ESHS/TSA/OCSP/SİL, geçerli fiziksel kart, gerçek HSM, bağımsız doğrulayıcı, yük,
 sızma, felaket kurtarma, hukuk ve bilgi güvenliği kabul kanıtları henüz tamamlanmamıştır.
@@ -24,7 +27,7 @@ sızma, felaket kurtarma, hukuk ve bilgi güvenliği kabul kanıtları henüz ta
 |---|---|---|
 | 1 — mevzuat/standart matrisi | Tamamlandı | Güncel kaynak ve hukuk onayı periyodik sürdürülmeli |
 | 2 — mimari/tehdit modeli | Tamamlandı | Ürün, KVKK, hukuk ve bilgi güvenliği onayı bekliyor |
-| 3 — teknik iskelet | Tamamlandı | CI gerçek GitHub deposunda ilk kez çalıştırılmalı |
+| 3 — teknik iskelet | Tamamlandı | Public GitHub CI/CodeQL ve monitor başarıyla çalıştı |
 | 4 — akıllı kart agent | Tamamlandı | AKİS ile geliştirme yapıldı; formal geçerli kart matrisi kaydedilmedi |
 | 5 — CAdES/TSA | Tamamlandı | Canlı TSA ve bağımsız ürün doğrulaması bekliyor |
 | 6 — doğrulama motoru | Tamamlandı | Canlı ESHS OCSP/SİL ve hukuk kabulü bekliyor |
@@ -129,10 +132,12 @@ TSA/ESHS/HSM, geçerli NES ve bağımsız ürün testinin yerine geçmez.
 
 - Apache-2.0, telif, DCO, Contributor Covenant, CODEOWNERS, destek ve güvenlik politikaları
   kaynak ağacında tamamlanmıştır.
-- Klasör henüz Git deposu değildir; `erbayaskin/e-imza-platform` public repository'si
-  oluşturulmamış ve ilk push yapılmamıştır.
-- GitHub `main` ruleset, Private Vulnerability Reporting, secret scanning ve ilk CI/CodeQL
-  sonuçları repo oluşturulduktan sonra etkinleştirilip doğrulanmalıdır.
+- erbayaskin/e-imza-platform public repository oluşturuldu; DCO imzalı geçmiş main dalına
+  yayımlandı ve GitHub Apache-2.0 lisansını algıladı.
+- main dal koruması; PR, bir onay, CODEOWNERS, güncel dal, konuşma çözümü ve gerçek
+  build/dependency-review/dco/analyze check adlarıyla etkinleştirildi.
+- Private Vulnerability Reporting, Dependabot, secret scanning/push protection etkin; CI,
+  CodeQL ve resmî kaynak monitor başarılıdır. Açık CodeQL uyarısı yoktur.
 - Kararlı release sürümü, artifact repository, checksum ve imzalı tag yayını henüz yoktur.
 
 ## 6. Bir sonraki önerilen çalışma sırası
@@ -143,7 +148,7 @@ TSA/ESHS/HSM, geçerli NES ve bağımsız ürün testinin yerine geçmez.
 3. Canlı TSA/OCSP/SİL ve trust store kayıtlarını onaylı kaynaklardan yükleyin.
 4. Bağımsız ürün sonuçlarını, test artifact özetlerini ve tarihli raporları kaydedin.
 5. Yük, güvenlik ve DR kapılarını tamamlayın.
-6. Public GitHub deposunu oluşturun ve `GITHUB_PUBLICATION_CHECKLIST.md` ayarlarını uygulayın.
+6. İlk gerçek katkı PR akışında DCO, dependency review, CODEOWNERS ve review kapılarını sınayın.
 7. Üretim kabulünden sonra `0.1.0-SNAPSHOT` yerine sürümlü release hazırlayın.
 
 ## 7. Durum güncelleme kuralı

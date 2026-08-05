@@ -11,15 +11,15 @@ kaydedildikten sonra işaretlenir.
 
 ## 1. Repository oluşturma ve ilk push
 
-- [ ] GitHub'da `erbayaskin/e-imza-platform` public repository oluşturuldu.
-- [ ] GitHub'ın otomatik README/LICENSE/gitignore üretmesi kapalı bırakıldı; yerel dosyalar esas
+- [x] GitHub'da `erbayaskin/e-imza-platform` public repository oluşturuldu.
+- [x] GitHub'ın otomatik README/LICENSE/gitignore üretmesi kapalı bırakıldı; yerel dosyalar esas
   alındı.
-- [ ] Yerelde `git init`, `main`, ilk DCO sign-off'lu commit oluşturuldu.
-- [ ] `origin` doğru repository adresine bağlandı ve `main` push edildi.
-- [ ] GitHub Apache-2.0 lisansını algıladı.
-- [ ] Maven `io.github.erbayaskin` ve Java `io.github.erbayaskin.eimza` namespace'leri build
+- [x] Yerelde `git init`, `main`, ilk DCO sign-off'lu commit oluşturuldu.
+- [x] `origin` doğru repository adresine bağlandı ve `main` push edildi.
+- [x] GitHub Apache-2.0 lisansını algıladı.
+- [x] Maven `io.github.erbayaskin` ve Java `io.github.erbayaskin.eimza` namespace'leri build
   artifact'lerinde doğrulandı; önceki kamu namespace'i kalmadı.
-- [ ] README, LICENSE, NOTICE, SECURITY ve Code of Conduct repository ana sayfasında erişilebilir.
+- [x] README, LICENSE, NOTICE, SECURITY ve Code of Conduct repository ana sayfasında erişilebilir.
 
 Örnek ilk yayın komutları:
 
@@ -37,47 +37,50 @@ git push -u origin main
 
 ## 2. Genel repository ayarları
 
-- [ ] Description, topics (`java`, `spring-boot`, `electronic-signature`, `cades`, `xades`,
+- [x] Description, topics (`java`, `spring-boot`, `electronic-signature`, `cades`, `xades`,
   `pades`, `pkcs11`, `turkey`) ve website alanı kontrol edildi.
-- [ ] Features altında Issues ve Discussions etkinleştirildi.
-- [ ] Yalnız **Allow squash merging** açık; merge commit ve rebase merge kapalı.
-- [ ] Squash commit başlığı PR başlığı olacak şekilde ayarlandı.
-- [ ] Branch'lerin merge sonrası otomatik silinmesi etkinleştirildi.
+- [x] Features altında Issues ve Discussions etkinleştirildi.
+- [x] Yalnız **Allow squash merging** açık; merge commit ve rebase merge kapalı.
+- [x] Squash commit başlığı PR başlığı olacak şekilde ayarlandı.
+- [x] Branch'lerin merge sonrası otomatik silinmesi etkinleştirildi.
 
 ## 3. `main` ruleset/branch protection
 
-- [ ] Pull request zorunlu.
-- [ ] En az 1 approving review zorunlu.
-- [ ] Code owner review zorunlu.
-- [ ] Yeni commit geldiğinde eski approval düşürülüyor.
-- [ ] Son review konuşmalarının çözülmesi zorunlu.
-- [ ] Dalın merge öncesi güncel olması zorunlu.
-- [ ] Force-push ve deletion kapalı.
-- [ ] Bypass listesi boş; kurallar yöneticilere de uygulanıyor.
-- [ ] İlk workflow çalıştıktan sonra CI build, dependency review, DCO ve CodeQL analyze kontrolleri
+- [x] Pull request zorunlu.
+- [x] En az 1 approving review zorunlu.
+- [x] Code owner review zorunlu.
+- [x] Yeni commit geldiğinde eski approval düşürülüyor.
+- [x] Son review konuşmalarının çözülmesi zorunlu.
+- [x] Dalın merge öncesi güncel olması zorunlu.
+- [x] Force-push ve deletion kapalı.
+- [x] Bypass listesi boş; kurallar yöneticilere de uygulanıyor.
+- [x] İlk workflow çalıştıktan sonra CI build, dependency review, DCO ve CodeQL analyze kontrolleri
   GitHub'da görünen **gerçek adlarıyla** required status check yapıldı.
 
 ## 4. Güvenlik ayarları
 
-- [ ] Settings → Security/Advanced Security → Private vulnerability reporting etkinleştirildi.
+- [x] Settings → Security/Advanced Security → Private vulnerability reporting etkinleştirildi.
 - [ ] Security alerts bildirimleri `@erbayaskin` için etkinleştirildi.
-- [ ] Dependabot alerts ve security updates etkinleştirildi.
-- [ ] Secret scanning ve push protection hesap planında mevcutsa etkinleştirildi.
-- [ ] CodeQL ilk taraması başarılı; kritik/yüksek açık bırakılmadı.
-- [ ] `SECURITY.md` içindeki **Report a vulnerability** bağlantısı çalışıyor.
+- [x] Dependabot alerts ve security updates etkinleştirildi.
+- [x] Secret scanning ve push protection etkinleştirildi.
+- [x] CodeQL taraması başarılı; açık code-scanning uyarısı kalmadı.
+- [x] SECURITY.md içindeki Report a vulnerability bağlantısı doğru özel rapor uç noktasına gidiyor.
+
+> Hesap düzeyindeki security notification tercihi GitHub kullanıcı ayarıdır; @erbayaskin
+> hesabında arayüzden ayrıca doğrulanmalıdır.
 
 ## 5. Issue, katkı ve topluluk
 
-- [ ] Bug ve feature issue formları repository üzerinde açılıyor.
-- [ ] Blank issue kapalı ve güvenlik bağlantısı özel rapora gidiyor.
-- [ ] Pull request şablonu görüntüleniyor.
+- [x] Bug ve feature issue formları repository üzerinde mevcut.
+- [x] Blank issue kapalı ve güvenlik bağlantısı özel rapora gidiyor.
+- [x] Pull request şablonu repository üzerinde mevcut.
 - [ ] CODEOWNERS otomatik review talebi oluşturuyor.
 - [ ] DCO kontrolü imzasız test commit'ini reddediyor ve sign-off'lu commit'i kabul ediyor.
 - [ ] Davranış bildirimi e-postası erişilebilir; public issue açılmıyor.
 
 ## 6. İlk CI ve yayın kanıtı
 
-- [ ] `CI`, `CodeQL` ve resmî kaynak monitor workflow'u en az bir kez başarılı çalıştı.
+- [x] `CI`, `CodeQL` ve resmî kaynak monitor workflow'u en az bir kez başarılı çalıştı.
 - [ ] Test raporu, JaCoCo ve CycloneDX SBOM artifact'leri indirilebildi.
 - [ ] `CHANGELOG.md` ilk release için güncellendi.
 - [ ] `0.1.0-SNAPSHOT` kararlı release sürümüne çevrildi.
@@ -86,20 +89,22 @@ git push -u origin main
 
 ## 7. Public veri kontrolü
 
-- [ ] Git geçmişi dahil secret taraması temiz.
-- [ ] PIN, özel anahtar, token, gerçek NES/kişisel veri ve üretim endpoint'i yok.
-- [ ] `agent-local.yml`, `.env`, keystore, runtime sertifikaları ve build çıktıları Git'e girmedi.
-- [ ] Public belgelerde kurum içi adres, kişi verisi ve hukuken doğrulanmamış uyumluluk iddiası yok.
-- [ ] Üçüncü taraf bağımlılık lisansları/SBOM release öncesi gözden geçirildi.
+- [x] Git geçmişi dahil secret taraması temiz.
+- [x] PIN, özel anahtar, token, gerçek NES/kişisel veri ve üretim endpoint'i yok.
+- [x] `agent-local.yml`, `.env`, keystore, runtime sertifikaları ve build çıktıları Git'e girmedi.
+- [x] Public belgelerde kurum içi adres, kişi verisi ve hukuken doğrulanmamış uyumluluk iddiası yok.
+- [x] Üçüncü taraf bağımlılık lisansları/SBOM public kaynak yayını öncesi gözden geçirildi.
 
 ## 8. Tamamlanma kaydı
 
 | Alan | Değer |
 |---|---|
-| Yayın tarihi | |
-| İlk commit SHA | |
-| İlk başarılı CI bağlantısı | |
-| CodeQL bağlantısı | |
-| Ruleset bağlantısı/kimliği | |
-| İlk release/tag | |
+| Yayın tarihi | 5 Ağustos 2026 |
+| İlk commit SHA | [f1f0721](https://github.com/erbayaskin/e-imza-platform/commit/f1f072102bfd45db108ce57e04e503ba2602db62) |
+| İlk başarılı CI bağlantısı | [CI #31010281397](https://github.com/erbayaskin/e-imza-platform/actions/runs/31010281397) |
+| Son doğrulanan CI bağlantısı | [CI #31011044426](https://github.com/erbayaskin/e-imza-platform/actions/runs/31011044426) |
+| CodeQL bağlantısı | [CodeQL #31011044421](https://github.com/erbayaskin/e-imza-platform/actions/runs/31011044421) |
+| Resmî kaynak monitor | [Official source monitor #31011126661](https://github.com/erbayaskin/e-imza-platform/actions/runs/31011126661) |
+| Dal koruması | [Classic main branch protection](https://github.com/erbayaskin/e-imza-platform/settings/branches) |
+| İlk release/tag | Yayımlanmadı; 0.1.0-SNAPSHOT devam ediyor |
 | Onaylayan | Erbay AŞKIN |
