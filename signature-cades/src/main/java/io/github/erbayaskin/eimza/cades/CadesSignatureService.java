@@ -18,6 +18,7 @@ import org.bouncycastle.asn1.ASN1Set;
 import org.bouncycastle.asn1.DERIA5String;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.DERSet;
+import org.bouncycastle.asn1.cms.AttributeTable;
 import org.bouncycastle.asn1.cms.Attribute;
 import org.bouncycastle.asn1.cms.CMSAttributes;
 import org.bouncycastle.asn1.cms.CMSObjectIdentifiers;
@@ -182,6 +183,81 @@ public class CadesSignatureService {
                 signingTime,
                 certificateValidityCheckActive);
         return multi(prepared, existingSignature, MultiSignatureType.PARALLEL, 0);
+    }
+
+    /**
+     * Returns the document embedded in an attached CAdES artifact.
+     */
+    public byte[] extractAttachedContent(byte[] existingSignature) {
+        try {
+            requireExistingSignature(existingSignature);
+            var content = signedData(existingSignature).getEncapContentInfo().getContent();
+            if (content == null) {
+                throw new CadesException(
+                        "CADES_ATTACHED_CONTENT_MISSING",
+                        "ATTACHED CAdES olarak bildirilen önceki artifact gömülü belge içermiyor.");
+            }
+            return ASN1OctetString.getInstance(content).getOctets();
+        } catch (CadesException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new CadesException(
+                    "CADES_ATTACHED_CONTENT_INVALID",
+                    "ATTACHED CAdES içindeki gömülü belge okunamadı.",
+                    exception);
+        }
+    }
+
+    /**
+     * Verifies that the supplied document matches every top-level signer in a detached
+     * CAdES artifact.
+     */
+    public void validateDetachedContent(byte[] existingSignature, byte[] content) {
+        if (content == null) {
+            throw new CadesException(
+                    "DETACHED_CONTENT_REQUIRED",
+                    "DETACHED CAdES için orijinal belge zorunludur.");
+        }
+        try {
+            requireExistingSignature(existingSignature);
+            var existing = signedData(existingSignature);
+            if (existing.getEncapContentInfo().getContent() != null) {
+                throw new CadesException(
+                        "CADES_DETACHED_PACKAGING_MISMATCH",
+                        "DETACHED olarak bildirilen önceki CAdES artifact gömülü belge içeriyor.");
+            }
+            if (existing.getSignerInfos().size() == 0) {
+                throw new CadesException(
+                        "SIGNER_COUNT_INVALID",
+                        "CAdES en az bir üst seviye imzalayan içermelidir.");
+            }
+            for (int index = 0; index < existing.getSignerInfos().size(); index++) {
+                var signer = SignerInfo.getInstance(existing.getSignerInfos().getObjectAt(index));
+                var attributes = new AttributeTable(signer.getAuthenticatedAttributes());
+                var messageDigest = attributes.get(CMSAttributes.messageDigest);
+                if (messageDigest == null || messageDigest.getAttrValues().size() != 1) {
+                    throw new CadesException(
+                            "CADES_MESSAGE_DIGEST_MISSING",
+                            "CAdES imzalayanında tekil messageDigest özelliği bulunamadı.");
+                }
+                var expected = ASN1OctetString.getInstance(
+                                messageDigest.getAttrValues().getObjectAt(0))
+                        .getOctets();
+                var actual = MessageDigest.getInstance(digestName(signer)).digest(content);
+                if (!MessageDigest.isEqual(expected, actual)) {
+                    throw new CadesException(
+                            "CADES_DETACHED_CONTENT_MISMATCH",
+                            "Orijinal belge mevcut DETACHED CAdES imzasıyla eşleşmiyor.");
+                }
+            }
+        } catch (CadesException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new CadesException(
+                    "CADES_DETACHED_CONTENT_VALIDATION_FAILED",
+                    "DETACHED CAdES orijinal belge eşleşmesi doğrulanamadı.",
+                    exception);
+        }
     }
 
     /**
@@ -478,7 +554,20 @@ public class CadesSignatureService {
                     "CADES_INVALID",
                     "önceki artifact CMS SignedData değildir.");
         }
+
         return SignedData.getInstance(contentInfo.getContent());
+    }
+
+    private static String digestName(SignerInfo signer) {
+        var oid = signer.getDigestAlgorithm().getAlgorithm();
+        for (var algorithm : CadesSignatureAlgorithm.values()) {
+            if (algorithm.digestIdentifier().getAlgorithm().equals(oid)) {
+                return algorithm.digestName();
+            }
+        }
+        throw new CadesException(
+                "ALGORITHM_NOT_ALLOWED",
+                "CAdES messageDigest algoritması desteklenmiyor: " + oid.getId());
     }
 
     private static void requireExistingSignature(byte[] existingSignature) {

@@ -9,10 +9,10 @@ import java.security.Provider;
 import java.security.Security;
 import java.security.Signature;
 import java.security.cert.X509Certificate;
-import java.util.Locale;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HexFormat;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.smartcardio.CardTerminal;
@@ -54,22 +54,8 @@ public class ServerPkcs11SigningService {
             try {
                 if (profile.deviceType() == ServerDeviceType.SMART_CARD) {
                     verifySmartCardAtr(profile);
-                    if (suppliedSmartCardPin == null || suppliedSmartCardPin.length == 0) {
-                        throw error(
-                                HttpStatus.BAD_REQUEST,
-                                "SERVER_SMART_CARD_PIN_REQUIRED",
-                                "Sunucu akıllı kartı için tek kullanımlık PIN zorunludur.");
-                    }
-                    pin = suppliedSmartCardPin.clone();
-                } else {
-                    if (suppliedSmartCardPin != null && suppliedSmartCardPin.length > 0) {
-                        throw error(
-                                HttpStatus.BAD_REQUEST,
-                                "HSM_PIN_NOT_ALLOWED",
-                                "HSM PIN'i API isteğinde kabul edilmez; credentialRef kullanılmalıdır.");
-                    }
-                    pin = credentials.resolve(profile.credentialRef());
                 }
+                pin = resolveSigningCredential(profile, suppliedSmartCardPin);
                 var slot = selectedSlot(profile, pin);
                 var keyStore = open(profile, slot, pin);
                 var selected = selectKey(keyStore, profile.certificateFingerprint());
@@ -102,12 +88,31 @@ public class ServerPkcs11SigningService {
                         profile.serverKeyId(),
                         profile.deviceType(),
                         exception);
-                throw classifiedPkcs11Error(exception);
+                throw classifiedPkcs11Error(profile, exception);
             } finally {
                 if (pin != null) Arrays.fill(pin, '\0');
                 if (prepared != null) prepared.destroy();
             }
         }
+    }
+
+    char[] resolveSigningCredential(ServerKeyProfile profile, char[] suppliedSmartCardPin) {
+        var supplied = suppliedSmartCardPin != null && suppliedSmartCardPin.length > 0;
+        if (profile.deviceType() == ServerDeviceType.SMART_CARD) {
+            if (supplied) {
+                return suppliedSmartCardPin.clone();
+            }
+            return hasText(profile.credentialRef())
+                    ? credentials.resolve(profile.credentialRef())
+                    : null;
+        }
+        if (supplied) {
+            throw error(
+                    HttpStatus.BAD_REQUEST,
+                    "HSM_PIN_NOT_ALLOWED",
+                    "HSM PIN'i API isteğinde kabul edilmez; credentialRef kullanılmalıdır.");
+        }
+        return credentials.resolve(profile.credentialRef());
     }
 
     private int selectedSlot(ServerKeyProfile profile, char[] pin) {
@@ -131,6 +136,7 @@ public class ServerPkcs11SigningService {
 
     private int discoverSlot(ServerKeyProfile profile, char[] pin) {
         Integer firstTokenSlot = null;
+        Exception loginRequiredFailure = null;
         for (int slot = 0; slot < MAX_SLOT_PROBES; slot++) {
             try {
                 var keyStore = open(profile, slot, pin);
@@ -151,7 +157,10 @@ public class ServerPkcs11SigningService {
                 if (cause.contains("CKR_PIN_INCORRECT")
                         || cause.contains("LOGIN FAILED")
                         || cause.contains("CKR_PIN_LOCKED")) {
-                    throw classifiedPkcs11Error(exception);
+                    throw classifiedPkcs11Error(profile, exception);
+                }
+                if (loginRequired(cause) && loginRequiredFailure == null) {
+                    loginRequiredFailure = exception;
                 }
                 // Empty/unavailable slots are expected while probing a smart card driver.
                 LOGGER.debug(
@@ -174,6 +183,9 @@ public class ServerPkcs11SigningService {
                     profile.serverKeyId(),
                     profile.slotListIndex());
             return profile.slotListIndex();
+        }
+        if (loginRequiredFailure != null) {
+            throw classifiedPkcs11Error(profile, loginRequiredFailure);
         }
         throw error(
                 HttpStatus.UNPROCESSABLE_CONTENT,
@@ -372,9 +384,11 @@ public class ServerPkcs11SigningService {
         return new ApiException(status, code, message, false);
     }
 
-    private static ApiException classifiedPkcs11Error(Exception exception) {
+    static ApiException classifiedPkcs11Error(
+            ServerKeyProfile profile, Exception exception) {
         var text = causeText(exception);
-        if (text.contains("CKR_PIN_INCORRECT") || text.contains("LOGIN FAILED")) {
+        if (!loginRequired(text)
+                && (text.contains("CKR_PIN_INCORRECT") || text.contains("LOGIN FAILED"))) {
             return error(
                     HttpStatus.UNPROCESSABLE_CONTENT,
                     "SERVER_SMART_CARD_PIN_INCORRECT",
@@ -392,7 +406,15 @@ public class ServerPkcs11SigningService {
                     "SERVER_PKCS11_TOKEN_NOT_PRESENT",
                     "PKCS#11 token/kart seçilen slotta bulunamadı.");
         }
-        if (text.contains("CKR_USER_NOT_LOGGED_IN")) {
+        if (loginRequired(text)) {
+            if (profile.deviceType() == ServerDeviceType.SMART_CARD) {
+                return error(
+                        HttpStatus.UNPROCESSABLE_CONTENT,
+                        "SERVER_SMART_CARD_LOGIN_REQUIRED",
+                        "Akıllı kart middleware/token oturumu özel anahtar işlemi için giriş gerektiriyor. "
+                                + "İstek PIN'i opsiyoneldir; bu cihaz için tek kullanımlık PIN verin "
+                                + "veya server key profilinde güvenli credentialRef yapılandırın.");
+            }
             return error(
                     HttpStatus.UNPROCESSABLE_CONTENT,
                     "SERVER_PKCS11_LOGIN_REQUIRED",
@@ -416,6 +438,18 @@ public class ServerPkcs11SigningService {
                 HttpStatus.UNPROCESSABLE_CONTENT,
                 "SERVER_PKCS11_SIGNING_FAILED",
                 "Sunucu PKCS#11 imzalama işlemi tamamlanamadı. Ayrıntı sunucu günlüğüne correlationId ile kaydedildi.");
+    }
+
+    private static boolean loginRequired(String text) {
+        return text.contains("CKR_USER_NOT_LOGGED_IN")
+                || text.contains("LOGIN REQUIRED")
+                || text.contains("NO PASSWORD PROVIDED")
+                || text.contains("PASSWORD MUST NOT BE NULL")
+                || text.contains("CALLBACK HANDLER AVAILABLE FOR RETRIEVING PASSWORD");
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private static String causeText(Throwable exception) {

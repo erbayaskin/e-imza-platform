@@ -62,7 +62,7 @@
   <div><label for="serverDeviceType">Cihaz türü</label><select id="serverDeviceType"><option>SMART_CARD</option><option>HSM</option></select></div>
   <div class="full"><label for="serverLibrary">PKCS#11 kütüphane dosyası</label><input id="serverLibrary" value="C:/Windows/System32/akisp11.dll"></div>
   <div><label for="serverSlot">Slot list index (HSM için zorunlu)</label><input id="serverSlot" type="number" min="0" placeholder="Akıllı kartta otomatik"></div>
-  <div><label for="serverCredentialRef">Credential environment variable adı</label><input id="serverCredentialRef" placeholder="HSM_PIN"></div>
+  <div><label for="serverCredentialRef">Credential environment variable adı (HSM zorunlu; kart opsiyonel)</label><input id="serverCredentialRef" placeholder="HSM_PIN veya SERVER_CARD_PIN"></div>
   <div><label for="serverAtr">ATR (akıllı kart)</label><input id="serverAtr" value="3B9F978131FE4580655443D3228231C073F621808105D3"></div>
   <div><label for="serverAtrMask">ATR maskesi</label><input id="serverAtrMask" value="FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"></div>
   <div><label for="serverFingerprint">Sertifika SHA-256 parmak izi (isteğe bağlı)</label><input id="serverFingerprint"></div>

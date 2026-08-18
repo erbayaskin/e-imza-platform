@@ -17,9 +17,10 @@ management:
         include: health,info
 eimza:
   agent:
-    device-id: ${EIMZA_AGENT_DEVICE_ID:UNCONFIGURED}
+    device-id: ${EIMZA_AGENT_DEVICE_ID:}
     device-private-key: ${EIMZA_AGENT_DEVICE_PRIVATE_KEY:}
     device-public-key: ${EIMZA_AGENT_DEVICE_PUBLIC_KEY:}
+    local-identity-path: ${EIMZA_AGENT_LOCAL_IDENTITY_PATH:.eimza/agent-device-identity.properties}
     manifest-public-key: ${EIMZA_AGENT_MANIFEST_PUBLIC_KEY:}
     allowed-origins:
       - ${EIMZA_AGENT_ALLOWED_ORIGIN:http://localhost:8080}

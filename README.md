@@ -12,6 +12,8 @@ Faz 1–11 yazılım teslimleri gerçekleştirilmiştir. Gerçek HSM, geçerli k
 ESHS/TSA, bağımsız birlikte çalışabilirlik, performans/sızma/DR ve hukuk/bilgi güvenliği
 kabulü tamamlanmadan mevzuata tam uyumluluk veya üretime hazır olma iddiası yapılmamalıdır.
 
+![E-İmza API afişi](docs/assets/e-imza-api-afisi.png)
+
 ## İlk kez açıyorsanız
 
 - Güncel yetenek ve açıklar: [PROJECT_STATUS.md](PROJECT_STATUS.md)
@@ -59,7 +61,7 @@ mvn "-Dmaven.repo.local=D:\ErbayProject\.m2\repository" clean verify
 
 ## Yerel çalıştırma
 
-`local` profil bellek içi H2 veritabanını kullanır:
+`local` profil yönetim tanımlarını yeniden başlatmalar arasında koruyan `.eimza/local-db` dosya tabanlı H2 veritabanını kullanır:
 
 ```shell
 mvn -pl signature-api -am package "-DskipTests"
@@ -83,14 +85,26 @@ Yönetim ve tanımlama ekranı: `http://localhost:8080/admin/`
   eşleştirir ve AKİS gibi kartların server-side profilini otomatik oluşturabilir.
 - Demo ekranı CAdES attached/detached, XAdES enveloped/enveloping/detached ve
   PAdES imzalarını doğrular; paketleme türü ile politika kontrollerini raporlar.
+- Çoklu CAdES ekranında ATTACHED artifact için orijinal belge yeniden seçilmez;
+  DETACHED artifact'e PARALLEL veya SERIAL imza eklerken orijinal belge zorunludur.
+
 
 Agent, yönetim ekranı ve agent gerektirmeyen server-side test akışı:
 [YONETIM_EKRANI_VE_AGENT_REHBERI.md](YONETIM_EKRANI_VE_AGENT_REHBERI.md)
+
+
+Server-side `SMART_CARD` PIN alanı opsiyoneldir. PIN yoksa güvenli profil
+`credentialRef` değeri veya PIN gerektirmeyen/mevcut token oturumu denenir; cihaz
+gerçekten giriş istiyorsa `SERVER_SMART_CARD_LOGIN_REQUIRED` döner. HSM istekte PIN
+kabul etmez ve güvenli `credentialRef` davranışını korur.
 
 Faz 10 teknik akışı: [FAZ_10_UCTAN_UCA_CADES_XADES_PADES.md](FAZ_10_UCTAN_UCA_CADES_XADES_PADES.md)
 
 Faz 11 Çoklu imza akışı:
 [FAZ_11_COKLU_IMZA_VE_JAVA_KUTUPHANE_ENTEGRASYONU.md](FAZ_11_COKLU_IMZA_VE_JAVA_KUTUPHANE_ENTEGRASYONU.md)
+
+CAdES ATTACHED/DETACHED seri ve paralel REST + Java/JAR örnekleri:
+[COKLU_IMZA_ORNEKLERI.md](COKLU_IMZA_ORNEKLERI.md)
 
 Doğrudan Java/JAR entegrasyonu:
 [JAVA_KUTUPHANE_ENTEGRASYONU.md](JAVA_KUTUPHANE_ENTEGRASYONU.md)
@@ -104,7 +118,16 @@ Copy-Item .\agent-local.example.yml .\agent-local.yml
 ```
 
 `agent-local.yml` Git'e alınmaz. ATR ve PKCS#11 yolu kuruluma göre bu yerel dosyada
-değiştirilir; PIN hiçbir yapılandırma dosyasına yazılmaz.
+değiştirilir; PIN hiçbir yapılandırma dosyasına yazılmaz. API başladıktan sonra agent'ı
+manifest anahtarı ve izinli origin otomatik ayarlanacak şekilde başlatın:
+
+```powershell
+.\scripts\start-local-agent.ps1
+```
+
+Local agent ilk çalıştırmada kalıcı UUID + Ed25519 cihaz anahtarını
+`.eimza/agent-device-identity.properties` altında üretir. Üretimde özel anahtar güvenli
+işletim sistemi/secret deposundan yapılandırılmalıdır.
 
 Güvenilir kök/alt kök sertifika deposu:
 [GUVENILIR_SERTIFIKA_DEPOSU.md](GUVENILIR_SERTIFIKA_DEPOSU.md)

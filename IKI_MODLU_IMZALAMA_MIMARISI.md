@@ -9,7 +9,7 @@ Platform iki imzalama modu destekler:
 | Mod | Donanım | PIN | Cihaz seçimi |
 |---|---|---|---|
 | `CLIENT_SIDE` | Yalnız kullanıcının akıllı kartı | Yalnız yerel Smart Card Agent penceresi | `deviceId` UUID + cihaza özel Ed25519 kanıtı |
-| `SERVER_SIDE` | Sunucu HSM'i veya sunucu akıllı kartı | HSM: güvenli `credentialRef`; kart: tek kullanımlık API PIN'i | Yönetici tanımlı `serverKeyId` |
+| `SERVER_SIDE` | Sunucu HSM'i veya sunucu akıllı kartı | HSM: güvenli `credentialRef`; kart: opsiyonel tek kullanımlık API PIN'i veya güvenli `credentialRef` | Yönetici tanımlı `serverKeyId` |
 
 İki mod da aynı CAdES, XAdES, PAdES, zaman damgası, sertifika doğrulama ve
 güvenilir kök/alt kök deposunu kullanır.
@@ -32,10 +32,12 @@ yönetici kontrollü kart profilindedir.
 UUID tek başına kimlik bilgisi değildir. `deviceId` cihazı adresler; Ed25519
 imzası cihaz sahipliği kanıtıdır.
 
-Yerel geliştirmede ajan anahtar yapılandırılmamışsa süreç ömrü boyunca geçici
-bir Ed25519 anahtarı üretir. `/agent/v1/device` yalnız cihaz UUID'si ve açık
-anahtarı döndürür. Demo ekranındaki `Yerel ajan cihaz anahtarını kaydet`
-düğmesi bu açık anahtarı yerel DB'ye kaydeder.
+Yerel geliştirmede ajan cihaz anahtarı yapılandırılmamışsa ilk çalıştırmada benzersiz
+UUID + Ed25519 anahtar çifti üretir ve `.eimza/agent-device-identity.properties`
+dosyasında kalıcılaştırır. `/agent/v1/device` yalnız UUID ve açık anahtarı döndürür;
+özel anahtar dışarı verilmez. İlk ve çoklu imza demoları bu kimliği seçili tenant'a
+otomatik ve idempotent kaydeder. Üretimde local dosya yerine işletim sistemi güvenli
+anahtar deposu/secret yönetimi kullanılmalıdır.
 
 Üretimde aşağıdaki iki değer secret/işletim sistemi güvenli deposundan ajana
 verilmelidir:
@@ -68,9 +70,15 @@ sertifika parmak izi ve tenant yetkisi yönetici yapılandırmasındadır.
 - `pkcs11-library`, `atr` ve `atr-mask` zorunludur.
 - ATR eşleşmeden imza başlatılmaz.
 - Slot akıllı kart için otomatik keşfedilir.
-- PIN `/server-sign` isteğinde tek kullanımlık alınır.
-- PIN DB'ye, hazırlık kaydına, denetim kaydına veya loga yazılmaz ve işlem
-  sonunda temizlenir.
+- `/server-sign` isteğindeki PIN opsiyoneldir. Verilirse yalnız işlem kopyaları
+  `char[]` olarak tutulur ve işlem sonunda temizlenir.
+- PIN verilmezse sırayla profilin opsiyonel güvenli `credentialRef` değeri ve
+  PIN gerektirmeyen/mevcut middleware-token oturumu kullanılarak imza denenir.
+- Cihaz gerçekten oturum açılmasını isterse genel bir ön kontrol yerine token
+  cevabı `SERVER_SMART_CARD_LOGIN_REQUIRED` Problem Details koduna çevrilir.
+- PIN DB'ye, hazırlık kaydına, denetim kaydına, manifest veya loga yazılmaz.
+- Client-side PIN davranışı değişmez; PIN yalnız Smart Card Agent Swing
+  penceresinde alınır.
 
 Örnek profiller `server-signing.example.yml` dosyasındadır.
 
@@ -110,7 +118,9 @@ Content-Type: application/json
 {"pin": null}
 ```
 
-HSM için `pin` boş olur. Sunucu akıllı kartı için tek kullanımlık PIN verilir.
+HSM için `pin` boş olur. Sunucu akıllı kartında alan opsiyoneldir; boşsa güvenli
+profil credential'ı veya mevcut/PIN gerektirmeyen token oturumu denenir. Giriş
+zorunluysa `SERVER_SMART_CARD_LOGIN_REQUIRED` döner.
 
 ## 5. Kalıcılık ve güvenlik kontrolleri
 

@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 import io.github.erbayaskin.eimza.smartcard.config.AgentProperties;
+import io.github.erbayaskin.eimza.smartcard.deviceidentity.AgentDeviceSigner;
 import io.github.erbayaskin.eimza.smartcard.error.AgentException;
 
 @Component
@@ -27,14 +28,21 @@ public class ManifestVerifier {
     private final Map<String, Instant> usedNonces = new ConcurrentHashMap<>();
 
     @Autowired
-    public ManifestVerifier(ObjectMapper objectMapper, AgentProperties properties) {
-        this(objectMapper, properties, Clock.systemUTC());
+    public ManifestVerifier(
+            ObjectMapper objectMapper,
+            AgentProperties properties,
+            AgentDeviceSigner deviceSigner) {
+        this(objectMapper, properties, deviceSigner.identity().deviceId(), Clock.systemUTC());
     }
 
-    ManifestVerifier(ObjectMapper objectMapper, AgentProperties properties, Clock clock) {
+    ManifestVerifier(
+            ObjectMapper objectMapper,
+            AgentProperties properties,
+            String deviceId,
+            Clock clock) {
         this.objectMapper = objectMapper;
         this.clock = clock;
-        this.deviceId = properties.getDeviceId();
+        this.deviceId = deviceId;
         this.publicKey = parsePublicKey(properties.getManifestPublicKey());
     }
 

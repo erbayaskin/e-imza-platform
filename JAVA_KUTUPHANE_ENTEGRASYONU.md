@@ -192,6 +192,24 @@ final class CardCadesSigner {
 
 ## CAdES paralel ve seri imza
 
+Dört CAdES paketleme/imza kombinasyonunun tam REST gövdeleri ve ayrı Java/JAR örnekleri
+[COKLU_IMZA_ORNEKLERI.md](COKLU_IMZA_ORNEKLERI.md) belgesindedir.
+
+CAdES ek imzada belge gereksinimini `PARALLEL`/`SERIAL` değil paketleme belirler.
+DETACHED artifact için orkestrasyon katmanı her iki imza türünde de orijinal belgeyi
+istemeli ve `cades.validateDetachedContent(previousP7s, originalDocument)` çağrısıyla
+imzalı özet eşleşmesini doğrulamalıdır. ATTACHED artifact için belge dışarıdan yeniden istenmez; doğrudan Java
+kullanımında gömülü içerik şöyle alınabilir:
+
+```java
+byte[] embeddedDocument = cades.extractAttachedContent(previousAttachedP7s);
+```
+
+Artifact gerçekte detached ise bu metot `CADES_ATTACHED_CONTENT_MISSING` kodlu
+`CadesException` üretir. Paralel hazırlıkta `embeddedDocument` ve `attached=true`
+kullanılır; seri counter-signature hazırlığı artifact'i doğrudan korur.
+
+
 ```java
 // Önceki .p7s içine bağımsız ikinci SignerInfo ekle
 CadesSigningPreparation coSign = cades.prepareParallel(

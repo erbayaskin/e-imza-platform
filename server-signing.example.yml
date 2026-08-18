@@ -18,5 +18,8 @@ eimza:
         # Yalnız sürücü sertifikayı PIN öncesi göstermiyorsa fallback olarak kullanılır.
         slot-list-index: 0
         certificate-fingerprint: SERTIFIKA_SHA256_PARMAK_IZI
+        # İstek PIN'i opsiyoneldir. Middleware login istiyorsa güvenli fallback olarak
+        # secret değerini değil yalnız environment secret adını tanımlayın:
+        # credential-ref: EIMZA_SERVER_CARD_PIN
         allowed-tenant-ids:
           - 11111111-1111-1111-1111-111111111111

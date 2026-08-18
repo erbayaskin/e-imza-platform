@@ -1,6 +1,6 @@
 # Yapay Zekâ ve Geliştirici Devir Teslim Rehberi
 
-> Son güncelleme: 5 Ağustos 2026  
+> Son güncelleme: 18 Ağustos 2026  
 > Güncel yazılım durumu: Faz 1–11 kod teslimleri mevcut; üretim kabul kapıları açık  
 > Ayrıntılı durum: [PROJECT_STATUS.md](PROJECT_STATUS.md)  
 > Çalışma kuralları: [AGENTS.md](AGENTS.md)
@@ -113,6 +113,13 @@ yazılım anahtarı örneklerinde hazırlanmış `signedAttributes`/`signedInfo`
 3. HSM: mutlak PKCS#11 yolu + sabit slot + `credentialRef`; ATR yok.
 4. İş uygulaması `/api/v1/signing-sessions` isteğinde yalnız `serverKeyId` gönderir.
 5. `/server-sign` yeni imzayı üretir. HSM secret değeri HTTP isteğinden alınmaz.
+6. SMART_CARD için `/server-sign` PIN alanı opsiyoneldir. PIN varsa yalnız işlem
+   süresince kopyalanır ve temizlenir; yoksa profil `credentialRef` değeri veya
+   PIN gerektirmeyen/mevcut token oturumu denenir.
+7. Kart middleware'i giriş isterse `SERVER_SMART_CARD_LOGIN_REQUIRED` döner;
+   istek daha PKCS#11 çağrılmadan genel bir PIN zorunluluğuyla reddedilmez.
+8. HSM istek PIN'ini kabul etmez ve zorunlu güvenli `credentialRef` çözümlemesini
+   kullanmaya devam eder.
 
 ### 4.3 Client-side
 
@@ -144,7 +151,7 @@ API alanları:
 - `signature-api` Spring Data JPA ve Flyway kullanır.
 - Güncel migration: `V12__add_multi_signature_sessions.sql`.
 - Mevcut migration değiştirilmez; yeni sürüm eklenir.
-- Local profil H2, üretim PostgreSQL kullanır.
+- Local profil `.eimza/local-db` dosya tabanlı H2, üretim PostgreSQL kullanır.
 - Güven deposu kök/alt kök CA kayıtlarını immutable snapshot sürümleriyle yönetir.
 - TSA ve doğrulama politikaları sürümlüdür.
 - Oturum belge/artifact alanları işlem sırasında DB'de bulunabilir; üretim saklama ve kişisel
@@ -183,8 +190,7 @@ java -jar .\signature-api\target\signature-api-0.1.0-SNAPSHOT-exec.jar `
 
 ```powershell
 Copy-Item .\agent-local.example.yml .\agent-local.yml
-$env:SPRING_CONFIG_ADDITIONAL_LOCATION='file:D:/ErbayProject/agent-local.yml'
-java -jar .\smartcard-agent\target\smartcard-agent-0.1.0-SNAPSHOT-exec.jar
+.\scripts\start-local-agent.ps1
 ```
 
 Makineye özel `agent-local.yml` Git'e eklenmez. AKİS profili için bilinen ATR

@@ -3,7 +3,7 @@
 > Güncel gerçekleşme ve açık kabul durumu için [PROJECT_STATUS.md](PROJECT_STATUS.md) esas alınır.
 
 > Belge durumu: Faz 6 yazılım MVP'si tamamlandı  
-> Son güncelleme: 30 Temmuz 2026  
+> Son güncelleme: 18 Ağustos 2026  
 > Çalışma yöntemi: Yeni gereksinimler geldikçe bu belge faz faz güncellenecek; alınan kararlar ve tamamlanan işler burada izlenecek.
 
 ## 1. Projenin amacı
@@ -532,6 +532,7 @@ Bir sonraki anlatımda aşağıdakiler netleştirildikçe Faz 0 güncellenecekti
 | K-034 | Aktif güvenlik saldırıları yalnız kontrollü test ortamına; canlı TSA/OCSP/CRL uçlarına yalnız pasif ve sözleşmeye uygun entegrasyon uygulanır. | Kabul edildi |
 | K-035 | Fiziksel kart sonradan temin edilecek; Faz 8 yazılım kabulü tamamlanırken gerçek kart/okuyucu/sürücü kabulü zorunlu bekleyen kapıdır. | Kabul edildi |
 | K-036 | Tenant başlığı JWT tenant claim'iyle bağlanır; üretim oturumu stateless olur ve ham belge/istek sınırları katmanlı uygulanır. | Gerçeklendi |
+| K-037 | Server-side SMART_CARD isteğinde PIN opsiyoneldir; PIN yoksa güvenli profil credential'ı veya token oturumu denenir, cihaz giriş isterse kararlı hata döner. HSM yalnız güvenli `credentialRef` kullanır. | Gerçeklendi; otomatik test geçti, fiziksel tekrar koşusu açık |
 
 Faz 8'in ayrıntılı adımları, kabul ölçütleri ve kalan işler
 `FAZ_8_GUVENLIK_PERFORMANS_VE_KABUL.md` dosyasındadır. Kart temin edildiğinde

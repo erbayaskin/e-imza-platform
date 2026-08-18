@@ -22,6 +22,9 @@ gösterecektir. Faz tamamlanmadan “üretime hazır” veya “tam mevzuat uyum
 - Birden çok okuyucu ve aynı anda birden çok kart
 - Public sertifikayı PIN'siz listeleme
 - Yanlış/doğru PIN, PIN kilitlenme uyarısı ve kart çıkarma
+- Server-side SMART_CARD için istek PIN'i olmadan token oturumu ve opsiyonel güvenli
+  profil credential'ı koşuları; login isteyen cihazda `SERVER_SMART_CARD_LOGIN_REQUIRED`
+- HSM'nin istek PIN'ini reddedip yalnız güvenli `credentialRef` kullanmayı sürdürmesi
 - RSA ve kart destekliyorsa EC algoritmaları
 - CAdES/XAdES/PAdES tek imza; CAdES/XAdES paralel-seri ve PAdES seri imza
 
