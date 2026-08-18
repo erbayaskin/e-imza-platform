@@ -17,7 +17,7 @@ import io.github.erbayaskin.eimza.core.model.TurkishSignatureProfile;
 
 public record CreateSigningSessionRequest(
         @NotNull UUID documentId,
-        @NotNull @Valid DocumentDigest documentDigest,
+        @Valid DocumentDigest documentDigest,
         @NotBlank @Size(max = 255) String documentName,
         @NotBlank @Size(max = 100) String mediaType,
         @Positive @Max(io.github.erbayaskin.eimza.api.security.ApiLimits.MAX_DOCUMENT_BYTES) long size,

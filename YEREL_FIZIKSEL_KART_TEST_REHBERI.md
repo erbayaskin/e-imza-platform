@@ -17,9 +17,9 @@ Başarılı imza tamamlama işlemi şu kontrollerin geçtiğini kanıtlar:
 5. Merkez API ham kart imzasını sertifikanın açık anahtarıyla doğrulamıştır.
 6. Seçilen CAdES, XAdES veya PAdES çıktısı oluşturulmuştur.
 
-Bağımsız imza doğrulama endpoint'i şu anda yalnız zaman damgalı ayrık CAdES
-`B_T`, `B_LT` ve `B_LTA` imzalarını doğrular. `B_B` CAdES ile XAdES/PAdES
-için bağımsız doğrulama API'si henüz yoktur.
+Ayrı doğrulama sayfası ve API; CAdES, XAdES, PAdES ile desteklenen tek/çoklu imza
+paketlerini doğrular, imzalayan sertifikalarını gösterir ve public `.cer` indirmesine
+izin verir. `INDETERMINATE` sonucu otomatik olarak geçerli sayılmaz.
 
 ## 2. Uygulamaları paketleme
 
@@ -59,21 +59,14 @@ Invoke-RestMethod http://localhost:8080/actuator/health |
 ```powershell
 cd D:\ErbayProject
 
-$env:EIMZA_AGENT_DEVICE_ID = "a8a0dc09-54ab-40b7-b404-bebd55ff1756"
-$env:EIMZA_AGENT_MANIFEST_PUBLIC_KEY = (
-  Invoke-RestMethod http://localhost:8080/api/v1/signing-configuration/manifest-key
-).publicKey
-$env:EIMZA_AGENT_ALLOWED_ORIGIN = "http://localhost:8080"
-$env:SPRING_CONFIG_ADDITIONAL_LOCATION = "file:D:/ErbayProject/agent-local.yml"
-
-java -jar .\smartcard-agent\target\smartcard-agent-0.1.0-SNAPSHOT-exec.jar
+.\scripts\start-local-agent.ps1
 ```
 
-Local/test API manifest Ed25519 anahtarını ilk çalıştırmada
-`.eimza/manifest-ed25519.pk8` ve `.spki` dosyalarında üretir ve sonraki
-restartlarda aynı anahtarı kullanır. Bu özelliğin eklendiği sürüme ilk geçişte
-agent public key değeri yukarıdaki komutla bir kez yenilenmelidir. Sonraki API
-restartları agent manifest doğrulamasını bozmaz.
+Başlatıcı local/test API manifest Ed25519 public key'ini her başlangıçta otomatik alır.
+API anahtarı `.eimza/manifest-ed25519.pk8` ve `.spki`, agent cihaz kimliği ise
+`.eimza/agent-device-identity.properties` altında kalıcıdır. Local API'nin server key,
+politika ve güven deposu tanımları `.eimza/local-db` içinde restartlar arasında korunur.
+Bu `.eimza` içeriği Git'e eklenmez.
 
 Kontrol:
 
@@ -291,3 +284,27 @@ doğrulandığını gösterir.
   raporlanır.
 - Yerel fiziksel kart kabul testinde kapatılan politika kontrolleri sonucu
   hukuken geçerli imza anlamına gelmez; raporda pasif politika olarak görünür.
+
+## 11. Server-side SMART_CARD opsiyonel PIN kabulü
+
+Bu koşu client-side agent akışından ayrıdır; kart API'nin çalıştığı makineye takılır ve
+PIN hiçbir komut satırına veya loga yazılmaz:
+
+1. Yönetim ekranında ATR eşleşmeli, otomatik slotlu SMART_CARD profili oluşturun.
+2. İlk `/server-sign` isteğinde `{"pin":null}` gönderin. API isteği genel bir PIN
+   zorunluluğuyla reddetmeden PKCS#11 middleware/token oturumunu denemelidir.
+3. Cihaz PIN gerektirmiyorsa veya önceden güvenli biçimde açılmış token oturumu varsa
+   imza sertifika/politika kontrollerine kadar ilerlemelidir.
+4. Profilde opsiyonel güvenli `credentialRef` tanımlıysa istek PIN'i olmadan bu kaynaktan
+   yalnız işlem ömürlü `char[]` çözülmeli; secret değeri DB/API/loga girmemelidir.
+5. Cihaz gerçekten giriş istiyorsa cevap `SERVER_SMART_CARD_LOGIN_REQUIRED` kodlu Problem
+   Details olmalıdır; eski `SERVER_SMART_CARD_PIN_REQUIRED` ön kontrolü dönmemelidir.
+6. Kullanıcı onayıyla demo formundaki opsiyonel PIN bir kez verilerek koşu tekrarlanabilir.
+   PIN işlem sonunda temizlenmeli, başarısızlıkta otomatik tekrar yapılmamalıdır.
+7. HSM profiliyle istek PIN'i gönderildiğinde `HSM_PIN_NOT_ALLOWED` kalmalı; HSM yalnız
+   yönetici tanımlı güvenli `credentialRef` kullanmalıdır.
+
+Mevcut AKİS geliştirme kartının sertifikası süresi doludur. Tarih politikası yalnız local/test
+kriptografik koşusunda pasifleştirilebilir; bu test teknik token erişimini kanıtlar, geçerli NES,
+üretim veya hukuk kabulünü kanıtlamaz. Client-side kabulte PIN yine yalnız Smart Card Agent
+Swing penceresinde alınır.

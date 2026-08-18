@@ -89,7 +89,10 @@ components:
         deviceId: {type: string, format: uuid}
         algorithm: {type: string, const: Ed25519}
         publicKey: {type: string, contentEncoding: base64}
-        persistence: {type: string, enum: [EPHEMERAL, CONFIGURED]}
+        persistence:
+          type: string
+          enum: [LOCAL_FILE, CONFIGURED]
+          description: LOCAL_FILE local otomatik kimlik; CONFIGURED dış güvenli depodan verilen anahtar
     SignedManifest:
       type: object
       required: [manifest, signature]

@@ -21,9 +21,9 @@ Yönetim sayfası şu tanımları ayrı bölümlerde yönetir:
 3. RFC 3161 zaman damgası profili
 4. Sertifika/imza doğrulama politikaları
 
-Server key ve TSA ayarları Flyway V9 ile DB'ye yazılır. TSA yetkilendirme değeri
-ve HSM PIN'i DB'ye yazılmaz; yalnız ortam değişkeninin adı olan `credentialRef`
-saklanır.
+Server key ve TSA ayarları Flyway V9 ile DB'ye yazılır. TSA yetkilendirme değeri,
+HSM PIN'i ve opsiyonel server-side kart PIN'i DB'ye yazılmaz; yalnız güvenli kaynağı
+gösteren ortam değişkeni adı `credentialRef` olarak saklanır.
 
 ## 2. Agent'ın görünür biçimde başlatılması
 
@@ -33,19 +33,14 @@ durum penceresi gösterir:
 ```powershell
 cd D:\ErbayProject
 
-$env:EIMZA_AGENT_DEVICE_ID = "a8a0dc09-54ab-40b7-b404-bebd55ff1756"
-$env:EIMZA_AGENT_MANIFEST_PUBLIC_KEY = (
-  Invoke-RestMethod http://localhost:8080/api/v1/signing-configuration/manifest-key
-).publicKey
-$env:EIMZA_AGENT_ALLOWED_ORIGIN = "http://localhost:8080"
-$env:SPRING_CONFIG_ADDITIONAL_LOCATION = "file:D:/ErbayProject/agent-local.yml"
-
-java -jar .\smartcard-agent\target\smartcard-agent-0.1.0-SNAPSHOT-exec.jar
+.\scripts\start-local-agent.ps1
 ```
 
-Pencerede agent adresi, cihaz UUID'si ve kart durumu gösterilir. `Kartları yenile`
-kart/ATR eşleşmesini tekrar tarar. Public sertifika listeleme PIN istemez; PIN
-penceresi yalnız özel anahtarla imza sırasında bir kez açılır.
+Başlatıcı API'den Ed25519 manifest public key'ini alır, izinli origin ve yerel profil
+yolunu yalnız agent sürecine verir. Agent ilk çalıştırmada `.eimza` altında kalıcı cihaz
+UUID + Ed25519 anahtarı oluşturur. Pencerede agent adresi, cihaz UUID'si ve kart durumu
+gösterilir. `Kartları yenile` kart/ATR eşleşmesini tekrar tarar. Public sertifika
+listeleme PIN istemez; PIN penceresi yalnız özel anahtarla imza sırasında bir kez açılır.
 
 Agent yalnız `CLIENT_SIDE` imzalama için kullanılır.
 
@@ -62,10 +57,15 @@ Yönetim sayfasında:
 - İzinli tenant: `11111111-1111-1111-1111-111111111111`
 - Etkin: seçili
 
-Profil kaydedildiğinde değiştirilemeyen UUID `serverKeyId` sunucu tarafından
-üretilir. Demo sayfasında `SERVER_SIDE` seçilip `Server key profillerini yükle`
-düğmesine basıldığında bu profil listelenir. Akıllı kart PIN'i yalnız o imza
-isteğinde sunucuya gönderilir ve kalıcı olarak saklanmaz.
+Profil kaydedildiğinde değiştirilemeyen UUID `serverKeyId` sunucu tarafından üretilir.
+Demo sayfası yalnız etkin ve seçili tenant'a izin veren profilleri listeler. Profil
+görünmüyorsa yönetim ekranındaki `İzinli tenant UUID’leri` alanı demo tenant'ıyla aynı
+olmalıdır. Demo formundaki server-side akıllı kart PIN'i opsiyoneldir. Verilirse yalnız
+tek işlem için bellekte tutulur; verilmezse profilin opsiyonel güvenli `credentialRef`
+değeri veya PIN gerektirmeyen/mevcut token oturumu denenir. Kart middleware'i gerçekten
+giriş istiyorsa `SERVER_SMART_CARD_LOGIN_REQUIRED` döner. PIN kalıcı olarak saklanmaz,
+loglanmaz veya manifeste yazılmaz. Client-side akış değişmez; PIN yalnız agent Swing
+penceresinden alınır.
 
 ## 4. HSM profili
 
@@ -118,9 +118,11 @@ Yönetim sayfasındaki `Akıllı kart profil kataloğu ve otomatik tanımlama` b
 4. Eşleşme bulunursa PKCS#11 yolu, ATR, ATR maskesi ve otomatik slot seçimi profil
    formuna yazılır.
 5. `Profili otomatik oluştur` ile tenant'a ait kalıcı `serverKeyId` üretilir.
-6. Server-side imzada PIN tek kullanımlık olarak gönderilir. Sürücü sertifikaları
-   PIN'siz göstermiyorsa API, bu PIN ile token slotlarını tarar ve uygun slotu
-   otomatik seçer; yönetici akıllı kart için slot girmek zorunda değildir.
+6. Server-side imzada PIN alanı opsiyoneldir. PIN varsa API bu işlem kopyasıyla,
+   yoksa profil credential'ı veya PIN'siz token oturumuyla slotları tarar ve uygun
+   slotu otomatik seçer; yönetici akıllı kart için slot girmek zorunda değildir.
+   Giriş gerektiren sürücü PIN/credential olmadan kullanılırsa açıklayıcı
+   `SERVER_SMART_CARD_LOGIN_REQUIRED` hatası döner.
 
 İlk hazır şablon AKİS kartıdır:
 

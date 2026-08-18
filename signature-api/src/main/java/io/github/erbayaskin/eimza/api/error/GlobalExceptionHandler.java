@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.Map;
 import org.slf4j.MDC;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -21,6 +22,21 @@ public class GlobalExceptionHandler {
         addCommonProperties(problem, request);
         problem.setProperty("code", exception.code());
         problem.setProperty("retryable", exception.retryable());
+        return problem;
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ProblemDetail handleUnreadableBody(
+            HttpMessageNotReadableException exception,
+            HttpServletRequest request) {
+        var problem = ProblemDetail.forStatus(400);
+        problem.setType(URI.create("https://errors.eimza.local/request-body-invalid"));
+        problem.setTitle("İstek gövdesi geçersiz");
+        problem.setDetail(
+                "JSON alan türleri API sözleşmesiyle eşleşmiyor; özellikle UUID ve enum alanlarını kontrol edin.");
+        problem.setProperty("code", "REQUEST_BODY_INVALID");
+        problem.setProperty("retryable", false);
+        addCommonProperties(problem, request);
         return problem;
     }
 

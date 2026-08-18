@@ -1,6 +1,6 @@
 # E-İmza Platformu — Güncel Proje Durumu
 
-> Durum tarihi: 5 Ağustos 2026  
+> Durum tarihi: 18 Ağustos 2026  
 > Yazılım sürümü: `0.1.0-SNAPSHOT`  
 > Şema sürümü: Flyway V12  
 > Sonraki faz: Faz 12 — üretim kabulü ve birlikte çalışabilirlik
@@ -28,7 +28,7 @@ sızma, felaket kurtarma, hukuk ve bilgi güvenliği kabul kanıtları henüz ta
 | 1 — mevzuat/standart matrisi | Tamamlandı | Güncel kaynak ve hukuk onayı periyodik sürdürülmeli |
 | 2 — mimari/tehdit modeli | Tamamlandı | Ürün, KVKK, hukuk ve bilgi güvenliği onayı bekliyor |
 | 3 — teknik iskelet | Tamamlandı | Public GitHub CI/CodeQL ve monitor başarıyla çalıştı |
-| 4 — akıllı kart agent | Tamamlandı | AKİS ile geliştirme yapıldı; formal geçerli kart matrisi kaydedilmedi |
+| 4 — akıllı kart agent | Tamamlandı | 6 Ağustos local AKİS kriptografik testi geçti; sertifika süresi dolu olduğundan formal geçerli kart kabulü açık |
 | 5 — CAdES/TSA | Tamamlandı | Canlı TSA ve bağımsız ürün doğrulaması bekliyor |
 | 6 — doğrulama motoru | Tamamlandı | Canlı ESHS OCSP/SİL ve hukuk kabulü bekliyor |
 | 7 — CAdES B-LT/B-LTA | Tamamlandı | Canlı kanıt ve haricî doğrulayıcı bekliyor |
@@ -48,8 +48,8 @@ sızma, felaket kurtarma, hukuk ve bilgi güvenliği kabul kanıtları henüz ta
 | CAdES B-LT/B-LTA | Var | Yükseltme ve arşiv yenileme |
 | XAdES B-B/B-T | Var | DETACHED/ENVELOPED/ENVELOPING |
 | PAdES B-B/B-T | Var | PDF ByteRange, ENVELOPED |
-| CAdES paralel | Var | Yeni üst seviye `SignerInfo` |
-| CAdES seri | Var | CMS `counterSignature` |
+| CAdES paralel | Var | Yeni üst seviye `SignerInfo`; DETACHED için orijinal belge zorunlu, ATTACHED içerik artifact'ten alınır |
+| CAdES seri | Var | CMS `counterSignature`; DETACHED için orijinal belge zorunlu, ATTACHED içerik artifact'ten alınır |
 | XAdES paralel | Var | DETACHED/ENVELOPING; ENVELOPED yok |
 | XAdES seri | Var | `xades:CounterSignature` |
 | PAdES seri | Var | Incremental PDF revision |
@@ -60,9 +60,9 @@ sızma, felaket kurtarma, hukuk ve bilgi güvenliği kabul kanıtları henüz ta
 
 | Yetenek | Durum | Not |
 |---|---|---|
-| Client-side akıllı kart | Var | Loopback agent, yerel Swing PIN |
+| Client-side akıllı kart | Var | Kalıcı local UUID/Ed25519 kimliği, otomatik tenant kaydı, loopback agent ve yerel Swing PIN |
 | Client-side HSM | Yok | Mimari gereği desteklenmez |
-| Server-side akıllı kart | Var | ATR ve otomatik slot keşfi |
+| Server-side akıllı kart | Var | ATR, otomatik slot keşfi; istek PIN'i opsiyonel, token login gerekirse kararlı hata |
 | Server-side HSM | Var | Kütüphane + slot + secret `credentialRef` |
 | PIN'siz public sertifika okuma | Var | Middleware izin verirse; yerel fallback mümkün |
 | AKİS kart profili | Var | ATR kayıtlı; formal kabul formu açık |
@@ -82,23 +82,45 @@ sızma, felaket kurtarma, hukuk ve bilgi güvenliği kabul kanıtları henüz ta
 | İmzalayan bilgisi ve public `.cer` indirme | Var |
 | Yönetim web ekranı | Var |
 | Ayrı doğrulama ve çoklu imza sayfaları | Var |
+| Local yönetim verisi kalıcılığı | Var | `.eimza/local-db`; üretim PostgreSQL |
+
+CAdES ek imza oturumunda orijinal belge gereksinimi PARALLEL/SERIAL ayrımına değil
+paketlemeye bağlıdır. ATTACHED artifact'in gömülü içeriği ve SHA-256 özeti sunucuda
+türetilir; dış belge gerekmez. DETACHED CAdES'te hem PARALLEL hem SERIAL için
+`documentBase64` zorunludur ve eksikse `DETACHED_CONTENT_REQUIRED` döner. ATTACHED olarak
+bildirilen artifact gömülü içerik taşımıyorsa `CADES_ATTACHED_CONTENT_MISSING`; DETACHED
+orijinal belge imzalı özetlerle eşleşmiyorsa `CADES_DETACHED_CONTENT_MISMATCH` döner.
+Bu dört kombinasyonun REST ve Java/JAR kullanım örnekleri `COKLU_IMZA_ORNEKLERI.md`
+belgesinde, API yetenek afişi ise `docs/assets/e-imza-api-afisi.png` dosyasındadır.
 
 ## 4. Otomatik doğrulama tabanı
 
-5 Ağustos 2026 tarihinde kök reaktörde çalıştırılan `mvn verify` başarıyla tamamlanmıştır.
-Son Surefire raporlarında dokuz modülde toplam 85 test vardır:
+18 Ağustos 2026 tarihinde zorunlu tam `clean verify` reaktör testi başarıyla tamamlanmıştır.
+Son Surefire raporlarında dokuz modülde toplam 107 test vardır:
 
 | Modül | Test | Başarısız/Hata |
 |---|---:|---:|
 | `signature-core` | 4 | 0 |
 | `certificate-validation` | 12 | 0 |
 | `timestamp-client` | 2 | 0 |
-| `signature-cades` | 11 | 0 |
+| `signature-cades` | 12 | 0 |
 | `signature-xades` | 3 | 0 |
 | `signature-pades` | 1 | 0 |
-| `smartcard-agent` | 19 | 0 |
+| `smartcard-agent` | 20 | 0 |
 | `desktop-signing-demo` | 3 | 0 |
-| `signature-api` | 30 | 0 |
+| `signature-api` | 50 | 0 |
+
+6 Ağustos 2026 local fiziksel testinde AKİS ATR'si eşleşti, public RSA sertifikası PIN'siz
+okundu, client cihazı otomatik/idempotent kaydedildi, Swing PIN penceresi açıldı ve CAdES B-B
+artifact'i uçtan uca tamamlandı. Sertifika 23 Kasım 2022'de dolduğu için tarih kontrolü yalnız
+local politikada pasifleştirildi; bu sonuç geçerli NES veya hukuki üretim kabulü değildir.
+Server-side profil doğru tenant ile yetki kontrolünü geçti. Önceki çalıştırmada PIN verilmeden
+PKCS#11 çağrısından önce dönen `SERVER_SMART_CARD_PIN_REQUIRED` uygulama varsayımı kaldırıldı.
+Güncel akış istek PIN'i yoksa opsiyonel güvenli profil credential'ını, ardından PIN'siz/mevcut
+token oturumunu dener; cihaz giriş isterse `SERVER_SMART_CARD_LOGIN_REQUIRED` döner. HSM yalnız
+güvenli `credentialRef` kullanmaya devam eder. Bu davranış otomatik testle doğrulanmıştır;
+süresi dolmuş AKİS kartıyla server-side fiziksel PIN'siz koşu henüz tekrarlanmadığından formal
+donanım veya hukuki kabul kanıtı değildir.
 
 Bu sayı üretim kabulü değildir. Test fixture'ları, mock servisler ve geliştirici kartı; gerçek
 TSA/ESHS/HSM, geçerli NES ve bağımsız ürün testinin yerine geçmez.

@@ -7,6 +7,7 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
@@ -344,12 +345,13 @@ public class SigningWorkflowService {
             session.transition(SigningSessionStatus.EXPIRED, clock.instant());
             throw error(HttpStatus.GONE, "SIGNING_SESSION_EXPIRED", "İmzalama oturumunun süresi doldu.");
         }
+        var suppliedPin = request.pin();
         try {
             var profile = serverKeys.require(session.serverKeyId(), tenantId);
             session.transition(SigningSessionStatus.CARD_SIGNING, clock.instant());
             var signed = serverSigning.sign(
                     profile,
-                    request.pin(),
+                    suppliedPin,
                     session.requestedSignatureAlgorithm(),
                     (certificate, algorithm) -> {
                         var value = prepare(session, certificate, algorithm);
@@ -380,6 +382,8 @@ public class SigningWorkflowService {
                     "SERVER_SIGNING_FAILED",
                     "Server-side imzalama tamamlanamadı.",
                     false);
+        } finally {
+            if (suppliedPin != null) Arrays.fill(suppliedPin, '\0');
         }
     }
 

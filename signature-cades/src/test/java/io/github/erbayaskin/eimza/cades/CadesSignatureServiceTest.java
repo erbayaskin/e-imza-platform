@@ -311,6 +311,78 @@ class CadesSignatureServiceTest {
     }
 
     @Test
+    void extractsEmbeddedContentOnlyFromAttachedCades() throws Exception {
+        var content = "attached-content".getBytes(StandardCharsets.UTF_8);
+        var keys = rsaKeys();
+        var certificate = certificate(
+                "CN=Attached Signer",
+                keys,
+                null,
+                keys,
+                false,
+                false,
+                BigInteger.valueOf(40));
+        var counterKeys = rsaKeys();
+        var counterCertificate = certificate(
+                "CN=Attached Counter Signer",
+                counterKeys,
+                null,
+                counterKeys,
+                false,
+                false,
+                BigInteger.valueOf(44));
+        var service = new CadesSignatureService();
+        var attachedPreparation = service.prepare(
+                content,
+                certificate,
+                CadesSignatureAlgorithm.RSA_PKCS1_SHA256,
+                null,
+                NOW,
+                true,
+                true);
+        var attached = service.completeBaseline(
+                attachedPreparation,
+                sign(attachedPreparation.signedAttributes(), keys));
+        var detachedPreparation = service.prepare(
+                content,
+                certificate,
+                CadesSignatureAlgorithm.RSA_PKCS1_SHA256,
+                null,
+                NOW,
+                false,
+                true);
+        var detached = service.completeBaseline(
+                detachedPreparation,
+                sign(detachedPreparation.signedAttributes(), keys));
+        var counterPreparation = service.prepareCounterSignature(
+                attached.encodedSignature(),
+                0,
+                counterCertificate,
+                CadesSignatureAlgorithm.RSA_PKCS1_SHA256,
+                null,
+                NOW.plusSeconds(1),
+                true);
+        var serialAttached = service.completeBaseline(
+                counterPreparation,
+                sign(counterPreparation.signedAttributes(), counterKeys));
+
+        assertThat(new CadesSignatureVerifier()
+                        .verify(null, serialAttached.encodedSignature(), null, Set.of())
+                        .cryptographicValidity())
+                .isTrue();
+
+        assertThat(service.extractAttachedContent(attached.encodedSignature()))
+                .isEqualTo(content);
+        assertThat(service.extractAttachedContent(serialAttached.encodedSignature()))
+                .isEqualTo(content);
+        assertThatThrownBy(() -> service.extractAttachedContent(detached.encodedSignature()))
+                .isInstanceOfSatisfying(
+                        CadesException.class,
+                        exception -> assertThat(exception.code())
+                                .isEqualTo("CADES_ATTACHED_CONTENT_MISSING"));
+    }
+
+    @Test
     void createsParallelAndSerialCadesSignatures() throws Exception {
         var content = "multi-cades".getBytes(StandardCharsets.UTF_8);
         var firstKeys = rsaKeys();
@@ -351,6 +423,14 @@ class CadesSignatureServiceTest {
         var first = service.completeBaseline(
                 firstPreparation,
                 sign(firstPreparation.signedAttributes(), firstKeys));
+        service.validateDetachedContent(first.encodedSignature(), content);
+        assertThatThrownBy(() -> service.validateDetachedContent(
+                        first.encodedSignature(),
+                        "wrong-content".getBytes(StandardCharsets.UTF_8)))
+                .isInstanceOfSatisfying(
+                        CadesException.class,
+                        exception -> assertThat(exception.code())
+                                .isEqualTo("CADES_DETACHED_CONTENT_MISMATCH"));
 
         var parallelPreparation = service.prepareParallel(
                 first.encodedSignature(),

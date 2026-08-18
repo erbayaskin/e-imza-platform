@@ -7,9 +7,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties("eimza.agent")
 public class AgentProperties {
 
-    private String deviceId = "UNCONFIGURED";
+    private String deviceId = "";
     private String devicePrivateKey = "";
     private String devicePublicKey = "";
+    private String localIdentityPath = ".eimza/agent-device-identity.properties";
     private String manifestPublicKey = "";
     private List<String> allowedOrigins = new ArrayList<>();
     private List<Profile> cardProfiles = new ArrayList<>();
@@ -36,6 +37,14 @@ public class AgentProperties {
 
     public void setDevicePublicKey(String devicePublicKey) {
         this.devicePublicKey = devicePublicKey;
+    }
+
+    public String getLocalIdentityPath() {
+        return localIdentityPath;
+    }
+
+    public void setLocalIdentityPath(String localIdentityPath) {
+        this.localIdentityPath = localIdentityPath;
     }
 
     public String getManifestPublicKey() {

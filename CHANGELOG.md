@@ -15,6 +15,7 @@ Sürümler Semantic Versioning 2.0.0 politikasını izler.
 - GitHub public yayın ve branch/security ayar kontrol listesi.
 - Maven lisans, geliştirici ve SCM metadata'sı.
 - 121 bileşenli SBOM lisans envanteri ve Dependency Review lisans politikası.
+- CAdES ATTACHED/DETACHED seri-paralel REST ve Java/JAR örnekleri ile API tanıtım afişi.
 
 ### Changed
 
@@ -23,6 +24,26 @@ Sürümler Semantic Versioning 2.0.0 politikasını izler.
 - Repository hazırlık durumu public yayın kararlarıyla güncellendi.
 - Public yayın öncesinde Maven `groupId` değeri `io.github.erbayaskin`, Java paket kökü
   `io.github.erbayaskin.eimza` olarak değiştirildi.
+- Local agent cihaz UUID + Ed25519 kimliği otomatik ve kalıcı üretilir; local API yönetim
+  verileri `.eimza/local-db` dosyasında yeniden başlatmalar arasında korunur.
+
+### Fixed
+
+- Client-side demo artık agent cihazını otomatik/idempotent kaydeder ve UUID JSON hatasını
+  ayrıntılı `REQUEST_BODY_INVALID` Problem Details cevabıyla gösterir.
+- İlk ve çoklu imza demoları yalnız seçili tenant'ın kullanabildiği server key profillerini
+  listeler; böylece `SERVER_KEY_FORBIDDEN` profil seçimi UI'da önlenir.
+- Local agent'ın API manifest public key'iyle doğru başlaması için
+  `scripts/start-local-agent.ps1` eklendi.
+- Server-side SMART_CARD imzasında istek PIN'i opsiyonel yapıldı; PIN yoksa güvenli profil
+  credential'ı veya PIN'siz/mevcut token oturumu denenir ve cihaz giriş gereksinimi
+  `SERVER_SMART_CARD_LOGIN_REQUIRED` koduyla bildirilir. HSM'nin yalnız güvenli
+  `credentialRef` kullanması değişmedi.
+- CAdES ek imzada orijinal belge gereksinimi PARALLEL/SERIAL yerine paketlemeye bağlandı:
+  ATTACHED içerik mevcut `.p7s` içinden alınır; DETACHED hem paralel hem seri imzada
+  belgeyi zorunlu tutar, belgeyi önceki imzalı özetlerle eşleştirir ve eksikliği
+  `DETACHED_CONTENT_REQUIRED`, uyuşmazlığı `CADES_DETACHED_CONTENT_MISMATCH` ile bildirir.
+
 
 ## 0.1.0-SNAPSHOT — 2026-08-05
 

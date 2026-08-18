@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +14,8 @@ import io.github.erbayaskin.eimza.core.model.SigningMode;
 import io.github.erbayaskin.eimza.core.model.MultiSignatureType;
 import io.github.erbayaskin.eimza.core.model.SignatureFormat;
 import io.github.erbayaskin.eimza.core.model.SignaturePackaging;
+import io.github.erbayaskin.eimza.cades.CadesException;
+import io.github.erbayaskin.eimza.cades.CadesSignatureService;
 
 @Service
 public class SigningSessionService {
@@ -21,9 +24,20 @@ public class SigningSessionService {
     private final SigningSessionRepository repository;
     private final Clock clock;
 
+    private final CadesSignatureService cades;
+
+    @Autowired
     public SigningSessionService(SigningSessionRepository repository, Clock clock) {
+        this(repository, clock, new CadesSignatureService());
+    }
+
+    SigningSessionService(
+            SigningSessionRepository repository,
+            Clock clock,
+            CadesSignatureService cades) {
         this.repository = repository;
         this.clock = clock;
+        this.cades = cades;
     }
 
     @Transactional
@@ -62,7 +76,19 @@ public class SigningSessionService {
         if (existing.isPresent()) {
             return SigningSessionResponse.from(existing.get());
         }
-        if (!"SHA-256".equals(request.documentDigest().algorithm())) {
+        var attachedAdditionalCades = request.format() == SignatureFormat.CADES
+                && packaging == SignaturePackaging.ATTACHED
+                && multiSignatureType != MultiSignatureType.SINGLE;
+        var requestedDocumentDigest = request.documentDigest();
+        if (requestedDocumentDigest == null && !attachedAdditionalCades) {
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "DOCUMENT_DIGEST_REQUIRED",
+                    "documentDigest zorunludur; yalnız ek ATTACHED CAdES imzasında gömülü belgeden türetilebilir.",
+                    false);
+        }
+        if (requestedDocumentDigest != null
+                && !"SHA-256".equals(requestedDocumentDigest.algorithm())) {
             throw new ApiException(
                     HttpStatus.UNPROCESSABLE_CONTENT,
                     "ALGORITHM_NOT_ALLOWED",
@@ -80,24 +106,59 @@ public class SigningSessionService {
         byte[] content = null;
         if (request.documentBase64() != null && !request.documentBase64().isBlank()) {
             content = io.github.erbayaskin.eimza.api.security.BoundedBase64Decoder.decode(
-                    request.documentBase64(), "documentBase64",
+                    request.documentBase64(),
+                    "documentBase64",
                     io.github.erbayaskin.eimza.api.security.ApiLimits.MAX_DOCUMENT_BYTES);
+        }
+        if (attachedAdditionalCades) {
+            byte[] embeddedContent;
             try {
-                var expected = decodeDigest(request.documentDigest().value());
-                var actual = MessageDigest.getInstance("SHA-256").digest(content);
-                if (!MessageDigest.isEqual(expected, actual)) {
-                    throw new ApiException(
-                            HttpStatus.UNPROCESSABLE_CONTENT,
-                            "DOCUMENT_DIGEST_MISMATCH",
-                            "Belge içeriği bildirilen SHA-256 özetiyle eşleşmiyor.",
-                            false);
-                }
-            } catch (ApiException exception) {
-                throw exception;
-            } catch (Exception exception) {
-                throw new IllegalStateException(exception);
+                embeddedContent = cades.extractAttachedContent(existingArtifact);
+            } catch (CadesException exception) {
+                throw new ApiException(
+                        HttpStatus.UNPROCESSABLE_CONTENT,
+                        exception.code(),
+                        exception.getMessage(),
+                        false);
+            }
+            if (content != null && !MessageDigest.isEqual(content, embeddedContent)) {
+                throw new ApiException(
+                        HttpStatus.UNPROCESSABLE_CONTENT,
+                        "DOCUMENT_CONTENT_MISMATCH",
+                        "Gönderilen belge mevcut ATTACHED CAdES içindeki belgeyle eşleşmiyor.",
+                        false);
+            }
+            content = embeddedContent;
+        }
+        if (request.format() == SignatureFormat.CADES
+                && packaging == SignaturePackaging.DETACHED
+                && multiSignatureType != MultiSignatureType.SINGLE
+                && content != null) {
+            try {
+                cades.validateDetachedContent(existingArtifact, content);
+            } catch (CadesException exception) {
+                throw new ApiException(
+                        HttpStatus.UNPROCESSABLE_CONTENT,
+                        exception.code(),
+                        exception.getMessage(),
+                        false);
             }
         }
+
+        var actualDigest = content == null ? null : sha256(content);
+        if (requestedDocumentDigest != null
+                && actualDigest != null
+                && !MessageDigest.isEqual(
+                        decodeDigest(requestedDocumentDigest.value()), actualDigest)) {
+            throw new ApiException(
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "DOCUMENT_DIGEST_MISMATCH",
+                    "Belge içeriği bildirilen SHA-256 özetiyle eşleşmiyor.",
+                    false);
+        }
+        var documentDigest = requestedDocumentDigest == null
+                ? Base64.getUrlEncoder().withoutPadding().encodeToString(actualDigest)
+                : requestedDocumentDigest.value();
         if (request.format() == io.github.erbayaskin.eimza.core.model.SignatureFormat.PADES
                 && content == null
                 && !(multiSignatureType == MultiSignatureType.SERIAL
@@ -106,6 +167,16 @@ public class SigningSessionService {
                     HttpStatus.UNPROCESSABLE_CONTENT,
                     "PDF_CONTENT_REQUIRED",
                     "PAdES için documentBase64 alanında PDF içeriği zorunludur.",
+                    false);
+        }
+        if (request.format() == SignatureFormat.CADES
+                && packaging == SignaturePackaging.DETACHED
+                && multiSignatureType != MultiSignatureType.SINGLE
+                && content == null) {
+            throw new ApiException(
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "DETACHED_CONTENT_REQUIRED",
+                    "DETACHED CAdES paralel veya seri imzada orijinal belge zorunludur.",
                     false);
         }
         if (content == null
@@ -119,7 +190,8 @@ public class SigningSessionService {
             throw new ApiException(
                     HttpStatus.UNPROCESSABLE_CONTENT,
                     "DOCUMENT_CONTENT_REQUIRED",
-                    "Seçilen paketleme veya CAdES SHA-384/SHA-512 algoritması için documentBase64 zorunludur.",
+                    "Seçilen paketleme veya CAdES SHA-384/SHA-512 algoritması için "
+                            + "documentBase64 zorunludur.",
                     false);
         }
         var now = clock.instant();
@@ -140,8 +212,8 @@ public class SigningSessionService {
                         request.format(),
                         request.targetLevel(),
                         request.turkishProfile(),
-                        request.documentDigest().algorithm(),
-                        request.documentDigest().value(),
+                        "SHA-256",
+                        documentDigest,
                         request.documentName(),
                         request.mediaType(),
                         request.purpose(),
@@ -287,6 +359,14 @@ public class SigningSessionService {
                     false);
         }
         return value;
+    }
+
+    private static byte[] sha256(byte[] content) {
+        try {
+            return MessageDigest.getInstance("SHA-256").digest(content);
+        } catch (java.security.NoSuchAlgorithmException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private static byte[] decodeDigest(String value) {

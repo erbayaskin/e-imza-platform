@@ -1,6 +1,8 @@
 eimza:
   agent:
-    # Kurulumda benzersiz UUID ve manifest public key ortam değişkenleriyle verilmelidir.
+    # Local geliştirmede cihaz UUID + Ed25519 anahtarı ilk çalıştırmada
+    # .eimza/agent-device-identity.properties altında otomatik üretilir.
+    # Üretimde cihaz anahtarı güvenli işletim sistemi deposundan verilmelidir.
     card-profiles:
       - id: akis-kart
         display-name: AKİS Akıllı Kart

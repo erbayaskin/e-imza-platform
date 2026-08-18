@@ -33,6 +33,7 @@
   <div><label>İmzalama modu</label><select id="mode"><option value="CLIENT_SIDE">Client-side akıllı kart</option><option value="SERVER_SIDE">Server-side kart / HSM</option></select></div>
  </div>
  <div id="clientIdentity">
+  <div class="notice">Agent'ı local testte <code>.\scripts\start-local-agent.ps1</code> ile başlatın; cihaz kimliği kart taramasında otomatik kaydedilir.</div>
   <div class="grid">
    <div><label>Cihaz UUID</label><input id="device" value="a8a0dc09-54ab-40b7-b404-bebd55ff1756"></div>
    <div><label>Kart / okuyucu</label><select id="card" disabled><option>Kartı tarayın</option></select></div>
@@ -42,15 +43,16 @@
  </div>
  <div id="serverIdentity" class="hidden">
   <label>Server-side anahtar profili</label><select id="serverKeyId"><option>Profilleri yükleyin</option></select>
-  <label>Sunucu akıllı kart PIN'i</label><input id="serverPin" type="password" autocomplete="off" placeholder="HSM için boş; kart için tek kullanımlık">
+  <label>Sunucu akıllı kart PIN'i (opsiyonel)</label><input id="serverPin" type="password" autocomplete="off" placeholder="Boşsa token oturumu veya güvenli profil credential'ı denenir; HSM için boş bırakın">
   <button id="loadServerKeys">Profilleri yükle</button>
+  <div id="serverKeyStatus" class="notice warn">Tenant için kullanılabilir profiller henüz yüklenmedi.</div>
  </div>
 </section>
 
 <section class="card">
  <h2>2. Mevcut imza ve yeni imza tipi</h2>
  <label>Mevcut imzalı artifact (.p7s, .xml veya .pdf)</label><input id="existingFile" type="file" accept=".p7s,.xml,.pdf">
- <label id="originalLabel">Orijinal belge (paralel CAdES/XAdES için zorunlu)</label><input id="originalFile" type="file">
+  <label id="originalLabel">Orijinal belge</label><input id="originalFile" type="file">
  <div class="grid">
   <div><label>Format</label><select id="format"><option>CADES</option><option>XADES</option><option>PADES</option></select></div>
   <div><label>Çoklu imza tipi</label><select id="multiType"><option>PARALLEL</option><option>SERIAL</option></select></div>
@@ -73,25 +75,44 @@ const out=x=>log.textContent=typeof x==='string'?x:JSON.stringify(x,null,2);
 const setStatus=x=>status.textContent=x;
 const b64=bytes=>{let s='';for(let i=0;i<bytes.length;i+=32768)s+=String.fromCharCode(...bytes.slice(i,i+32768));return btoa(s)};
 const b64url=bytes=>b64(bytes).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
-const headers=()=>({'Content-Type':'application/json','X-Tenant-Id':tenant.value});
-async function json(url,options={}){const r=await fetch(url,options);const x=await r.json();if(!r.ok)throw new Error(JSON.stringify(x));return x}
+const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const tenantId=()=>{const value=tenant.value.trim();if(!uuidPattern.test(value))throw new Error('Tenant UUID geçerli bir UUID olmalıdır.');return value};
+const headers=()=>({'Content-Type':'application/json','X-Tenant-Id':tenantId()});
+async function json(url,options={}){
+ const r=await fetch(url,options);const text=await r.text();let x=null;
+ if(text){try{x=JSON.parse(text)}catch{x={message:text}}}
+ if(!r.ok){const e=new Error(x?.detail||x?.message||`${r.status} ${r.statusText}`);e.payload=x;e.status=r.status;throw e}
+ return x;
+}
 const packagingByFormat={CADES:['DETACHED','ATTACHED'],XADES:['DETACHED','ENVELOPING'],PADES:['ENVELOPED']};
 
 function updateControls(){
  const pades=format.value==='PADES';
  if(pades){multiType.value='SERIAL';multiType.disabled=true;targetIndex.value='0'}else multiType.disabled=false;
  const values=packagingByFormat[format.value];
+ const selectedPackaging=packaging.value;
  packaging.innerHTML=values.map(x=>`<option>${x}</option>`).join('');
+ if(values.includes(selectedPackaging))packaging.value=selectedPackaging;
  packaging.disabled=values.length===1;
  targetIndex.disabled=multiType.value!=='SERIAL'||pades;
+ updateOriginalControl();
+}
+function updateOriginalControl(){
+ const pades=format.value==='PADES';
+ const attachedCades=format.value==='CADES'&&packaging.value==='ATTACHED';
  originalLabel.textContent=pades
   ? 'Orijinal belge gerekmez; mevcut imzalı PDF yeni revision kaynağıdır'
-  : multiType.value==='PARALLEL'
-    ? 'Orijinal belge (paralel imza için zorunlu)'
-    : 'Orijinal belge (seri karşı-imzada isteğe bağlı)';
- originalFile.disabled=pades;
+  : attachedCades
+    ? 'Orijinal belge gerekmez; ATTACHED CAdES içindeki belge kullanılır'
+    : format.value==='CADES'
+      ? 'Orijinal belge (DETACHED CAdES paralel ve seri imzada zorunlu)'
+      : multiType.value==='PARALLEL'
+        ? 'Orijinal belge (paralel XAdES için zorunlu)'
+        : 'Orijinal belge (seri XAdES karşı-imzada isteğe bağlı)';
+ originalFile.disabled=pades||attachedCades;
+ if(originalFile.disabled)originalFile.value='';
 }
-format.onchange=updateControls;multiType.onchange=updateControls;
+format.onchange=updateControls;multiType.onchange=updateControls;packaging.onchange=updateOriginalControl;
 
 function updateAlgorithms(){
  const cert=certificate._items?.[Number(certificate.value)];
@@ -104,21 +125,30 @@ certificate.onchange=updateAlgorithms;
 mode.onchange=()=>{
  const client=mode.value==='CLIENT_SIDE';
  clientIdentity.classList.toggle('hidden',!client);serverIdentity.classList.toggle('hidden',client);
- sign.disabled=client?!certificate._items?.length:false;
+ sign.disabled=client?!certificate._items?.length:!serverKeyId.value;
  if(!client)loadServerKeys.click();
  updateAlgorithms();
 };
+async function ensureClientDevice(){
+ const identity=await json(agent+'/device');
+ if(!uuidPattern.test(identity?.deviceId||'')){
+  throw new Error('Agent geçerli cihaz UUID’si üretmedi. Güncel agent paketini scripts/start-local-agent.ps1 ile başlatın.');
+ }
+ const registered=await json(api+'/admin/client-devices',{method:'POST',headers:headers(),body:JSON.stringify({
+  deviceId:identity.deviceId,displayName:'Çoklu imza demo agentı',publicKey:identity.publicKey
+ })});
+ device.value=identity.deviceId;
+ return {identity,registered};
+}
 registerDevice.onclick=async()=>{
- try{
-  const identity=await json(agent+'/device');device.value=identity.deviceId;
-  const result=await json(api+'/admin/client-devices',{method:'POST',headers:headers(),body:JSON.stringify({
-   deviceId:identity.deviceId,displayName:'Çoklu imza demo agentı',publicKey:identity.publicKey
-  })});out(result);
- }catch(e){out(e.message)}
+ try{registerDevice.disabled=true;out(await ensureClientDevice())}
+ catch(e){out(e.payload||e.message)}
+ finally{registerDevice.disabled=false}
 };
 discover.onclick=async()=>{
  try{
   discover.disabled=true;sign.disabled=true;
+  const registration=await ensureClientDevice();
   const cards=await json(agent+'/cards');
   card.innerHTML=cards.filter(x=>x.status==='READY').map(x=>`<option value="${x.readerId}">${x.profileName} — ${x.readerId}</option>`).join('');
   if(!card.value)throw new Error('READY kart bulunamadı');
@@ -127,35 +157,50 @@ discover.onclick=async()=>{
   certificate._items=certs.filter(x=>x.hasPrivateKey);
   certificate.innerHTML=certificate._items.map((x,i)=>`<option value="${i}">${x.subject}</option>`).join('');
   if(!certificate._items.length)throw new Error('İmza sertifikası bulunamadı');
-  certificate.disabled=false;sign.disabled=false;updateAlgorithms();setStatus('Sertifika seçildi. PIN yalnız imza sırasında agent tarafından istenir.');
- }catch(e){out(e.message)}finally{discover.disabled=false}
+  certificate.disabled=false;sign.disabled=false;updateAlgorithms();setStatus('Agent kaydedildi ve sertifika seçildi. PIN yalnız imza sırasında agent tarafından istenir.');
+  out({registration,cards,certificates:certificate._items});
+ }catch(e){out(e.payload||e.message)}finally{discover.disabled=false}
 };
+let serverProfiles=[];
 loadServerKeys.onclick=async()=>{
  try{
+  const currentTenant=tenantId();
   const profiles=await json(api+'/admin/server-key-profiles',{headers:headers()});
-  const enabled=profiles.filter(x=>x.enabled);
-  serverKeyId.innerHTML=enabled.map(x=>`<option value="${x.serverKeyId}">${x.displayName} — ${x.deviceType}</option>`).join('');
-  sign.disabled=!enabled.length;out(profiles);
- }catch(e){out(e.message)}
+  serverProfiles=profiles.filter(x=>x.enabled&&(!x.allowedTenantIds?.length||x.allowedTenantIds.includes(currentTenant)));
+  const blocked=profiles.filter(x=>x.enabled&&!serverProfiles.includes(x));
+  serverKeyId.innerHTML=serverProfiles.map(x=>`<option value="${x.serverKeyId}">${x.displayName} — ${x.deviceType}</option>`).join('');
+  if(!serverProfiles.length)serverKeyId.innerHTML='<option value="">Bu tenant için etkin profil yok</option>';
+  serverKeyStatus.textContent=serverProfiles.length
+   ? `${serverProfiles.length} kullanılabilir profil.${blocked.length?` ${blocked.length} profil tenant yetkisi nedeniyle gizlendi.`:''}`
+   : `Tenant ${currentTenant} için profil yok; yönetim ekranındaki izinli tenant listesini düzeltin.`;
+  sign.disabled=!serverKeyId.value;out({tenantId:currentTenant,availableProfiles:serverProfiles,blockedProfileCount:blocked.length});
+ }catch(e){serverKeyStatus.textContent=e.message;out(e.payload||e.message)}
 };
+serverKeyId.onchange=()=>{if(mode.value==='SERVER_SIDE')sign.disabled=!serverKeyId.value};
+tenant.onchange=()=>{if(mode.value==='SERVER_SIDE')loadServerKeys.click()};
 
 sign.onclick=async()=>{
  try{
   sign.disabled=true;
   const client=mode.value==='CLIENT_SIDE';
+  if(client)await ensureClientDevice();
   const artifactFile=existingFile.files[0],sourceFile=originalFile.files[0];
   const cert=certificate._items?.[Number(certificate.value)];
   if(!artifactFile)throw new Error('Mevcut imzalı artifact seçilmelidir.');
   if(client&&(!cert||!card.value))throw new Error('Kart ve sertifika seçilmelidir.');
-  if(!client&&!serverKeyId.value)throw new Error('Server-side profil seçilmelidir.');
-  if(multiType.value==='PARALLEL'&&!sourceFile)throw new Error('Paralel imza için orijinal belge seçilmelidir.');
+  if(!client&&!serverKeyId.value)throw new Error('Server-side için bu tenant’a izinli profil seçilmelidir.');
+  if(!client&&!serverProfiles.some(x=>x.serverKeyId===serverKeyId.value))throw new Error('Seçilen server key bu tenant için kullanılamaz; profilleri yeniden yükleyin.');
+  const originalRequired=(format.value==='CADES'&&packaging.value==='DETACHED')
+   ||(format.value==='XADES'&&multiType.value==='PARALLEL');
+  if(originalRequired&&!sourceFile)throw new Error('Seçilen paketleme ve imza tipi için orijinal belge seçilmelidir.');
   if(format.value==='PADES'&&!artifactFile.name.toLowerCase().endsWith('.pdf'))throw new Error('PAdES için imzalı PDF seçilmelidir.');
   const existingBytes=new Uint8Array(await artifactFile.arrayBuffer());
   const sourceBytes=sourceFile?new Uint8Array(await sourceFile.arrayBuffer()):existingBytes;
   const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',sourceBytes));
-  const includeDocument=multiType.value==='PARALLEL'&&format.value!=='PADES';
+  const attachedCadesWithoutOriginal=format.value==='CADES'&&packaging.value==='ATTACHED'&&!sourceFile;
+  const includeDocument=!!sourceFile&&format.value!=='PADES';
   const session=await json(api+'/signing-sessions',{method:'POST',headers:{...headers(),'Idempotency-Key':crypto.randomUUID()},body:JSON.stringify({
-   documentId:crypto.randomUUID(),documentDigest:{algorithm:'SHA-256',value:b64url(digest)},
+   documentId:crypto.randomUUID(),documentDigest:attachedCadesWithoutOriginal?null:{algorithm:'SHA-256',value:b64url(digest)},
    documentName:sourceFile?.name||artifactFile.name,mediaType:sourceFile?.type||artifactFile.type||'application/octet-stream',
    size:sourceBytes.length,format:format.value,targetLevel:level.value,turkishProfile:'P1',
    purpose:multiType.value==='PARALLEL'?'Bağımsız paralel onay':'Seri onay / karşı-imza',
@@ -183,8 +228,8 @@ sign.onclick=async()=>{
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([bytes],{type:artifact.mediaType}));a.download=artifactFile.name+ext;a.click();
   setStatus('Yeni '+multiType.value+' imza eklendi ve artifact indirildi.');
   out({session,artifactId:artifact.artifactId,sha256:artifact.sha256});
- }catch(e){setStatus('Çoklu imza tamamlanamadı.');out(e.message)}
- finally{sign.disabled=mode.value==='CLIENT_SIDE'?!certificate._items?.length:false}
+ }catch(e){setStatus('Çoklu imza tamamlanamadı.');out(e.payload||e.message)}
+ finally{sign.disabled=mode.value==='CLIENT_SIDE'?!certificate._items?.length:!serverKeyId.value}
 };
 updateControls();
 </script>

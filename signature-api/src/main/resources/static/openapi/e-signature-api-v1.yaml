@@ -170,11 +170,20 @@ paths:
               properties:
                 pin:
                   type: [string, "null"]
+                  minLength: 1
                   maxLength: 128
-                  description: Yalnız sunucu akıllı kartı için tek kullanımlık PIN; HSM'de boş
+                  description: >-
+                    Opsiyonel, yalnız sunucu akıllı kartı için tek kullanımlık PIN.
+                    Verilmezse profil credentialRef'i veya mevcut/PIN gerektirmeyen token
+                    oturumu denenir. HSM için gönderilemez; HSM credentialRef kullanır.
       responses:
         "200":
           description: Tamamlanmış CAdES/XAdES/PAdES çıktısı
+        "422":
+          description: Kart token oturumu giriş gerektiriyorsa code alanı SERVER_SMART_CARD_LOGIN_REQUIRED olur
+          content:
+            application/problem+json:
+              schema: {$ref: "#/components/schemas/Problem"}
   /admin/client-devices:
     post:
       tags: [Client Devices]
@@ -593,7 +602,6 @@ components:
       additionalProperties: false
       required:
         - documentId
-        - documentDigest
         - documentName
         - mediaType
         - size
@@ -608,6 +616,10 @@ components:
           format: uuid
         documentDigest:
           $ref: "#/components/schemas/DocumentDigest"
+          description: >-
+            Genel olarak zorunludur. Mevcut ATTACHED CAdES artifact'ine PARALLEL veya
+            SERIAL imza eklenirken atlanabilir; sunucu özeti artifact içindeki gömülü
+            belgeden türetir.
         documentName:
           type: string
           maxLength: 255
@@ -642,7 +654,14 @@ components:
         documentBase64:
           type: string
           contentEncoding: base64
-          description: PAdES, attached CAdES, enveloped/enveloping XAdES ve SHA-384/512 CAdES için zorunlu
+          description: >-
+            İlk ATTACHED CAdES, enveloped/enveloping XAdES, gerekli PAdES işlemleri ve
+            SHA-384/512 CAdES için zorunludur. Mevcut CAdES'e ek imzada gereksinim
+            multiSignatureType'tan değil paketlemeden doğar: DETACHED PARALLEL/SERIAL
+            için orijinal belge zorunludur; ATTACHED PARALLEL/SERIAL için belge
+            existingArtifactBase64 içinden alınır ve bu alan gerekmez. DETACHED belge
+            mevcut üst seviye imzaların messageDigest değerleriyle eşleşmezse
+            CADES_DETACHED_CONTENT_MISMATCH döner.
         signaturePackaging:
           type: string
           enum: [ATTACHED, DETACHED, ENVELOPED, ENVELOPING]
@@ -658,7 +677,10 @@ components:
         existingArtifactBase64:
           type: string
           contentEncoding: base64
-          description: PARALLEL/SERIAL için zorunlu önceki CAdES, XAdES veya PAdES artifact'i
+          description: >-
+            PARALLEL/SERIAL için zorunlu önceki CAdES, XAdES veya PAdES artifact'i.
+            CAdES ATTACHED seçildiğinde gömülü belge bu artifact'ten okunur; artifact
+            gerçekte detached ise CADES_ATTACHED_CONTENT_MISSING döner.
         targetSignatureIndex:
           type: integer
           minimum: 0
@@ -1090,7 +1112,11 @@ components:
         atr: {type: [string, "null"]}
         atrMask: {type: [string, "null"]}
         certificateFingerprint: {type: [string, "null"]}
-        credentialRef: {type: [string, "null"]}
+        credentialRef:
+          type: [string, "null"]
+          description: >-
+            HSM için zorunlu güvenli secret referansı; SMART_CARD için istek PIN'i
+            verilmediğinde kullanılabilecek opsiyonel güvenli credential referansı
         allowedTenantIds:
           type: array
           items: {type: string, format: uuid}

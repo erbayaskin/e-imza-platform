@@ -115,6 +115,24 @@ göstermediğinden slot taraması, istekle gelen tek kullanımlık PIN kullanıl
 yapılır. Bulunan slot `serverKeyId` bazında süreç belleğinde önbelleğe alınır;
 PIN kalıcılaştırılmaz ve günlüklenmez.
 
+### 18 Ağustos 2026 server-side SMART_CARD PIN kararı
+
+Yukarıdaki PIN'li AKİS slot keşfi tarihsel fiziksel test akışıdır; güncel API
+PIN'i bütün SMART_CARD cihazları için genel ön koşul saymaz:
+
+1. `/server-sign` istek PIN'i opsiyoneldir.
+2. PIN verilirse yalnız işlem kapsamındaki `char[]` kopyaları kullanılır ve temizlenir.
+3. PIN verilmezse profilin opsiyonel güvenli `credentialRef` değeri, yoksa mevcut
+   veya PIN gerektirmeyen middleware/token oturumu denenir.
+4. Token gerçekten giriş istiyorsa cihaz/sağlayıcı cevabı kararlı
+   `SERVER_SMART_CARD_LOGIN_REQUIRED` Problem Details koduna çevrilir.
+5. HSM için istek PIN'i reddedilmeye ve zorunlu güvenli `credentialRef` çözümlemesi
+   kullanılmaya devam eder.
+6. Client-side PIN akışı değişmemiştir; PIN yalnız agent Swing penceresinde alınır.
+7. Otomatik kabul testleri PIN'siz middleware denemesini, opsiyonel profil credential'ını,
+   tek kullanımlık istek PIN'i kopyasını, HSM sınırını ve login-required hata kodunu kapsar;
+   fiziksel AKİS server-side tekrar koşusu ayrı kabul kapısıdır.
+
 `HSM` profillerinde ATR kullanılmaz. Mutlak sürücü kitaplığı ve
 `slot-list-index` açıkça verilmek zorundadır; `auto-discover-slot=false` olur
 ve HSM slotları otomatik taranmaz. Bu ayrım yanlış HSM partition/slotunun

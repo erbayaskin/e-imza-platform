@@ -30,13 +30,32 @@ XAdES için `DETACHED` veya `ENVELOPING` kullanılır.
 - `existingArtifactBase64`: ek imzada zorunlu önceki artifact
 - `targetSignatureIndex`: seri CAdES/XAdES için 0 tabanlı hedef; varsayılan 0
 
-Sonraki server-side ve client-side adımlar ilk imza akışıyla aynıdır. Manifest,
-yeni imzalayanın sertifikasına ve yeni hazırlanmış digest'e bağlanır. PIN ve özel
-anahtar davranışı değişmez.
+CAdES ek imzada orijinal belge koşulu imza semantiğinden değil paketlemeden doğar:
+
+- `ATTACHED + PARALLEL/SERIAL`: `documentBase64` gerekmez. Gömülü belge ve SHA-256
+  özeti `existingArtifactBase64` içinden türetilir.
+- `DETACHED + PARALLEL/SERIAL`: orijinal belge `documentBase64` ile zorunludur.
+- ATTACHED olarak bildirilen önceki artifact gömülü belge içermiyorsa
+  `CADES_ATTACHED_CONTENT_MISSING`; DETACHED belge eksikse `DETACHED_CONTENT_REQUIRED`,
+  belge mevcut üst seviye imzaların `messageDigest` değerleriyle eşleşmiyorsa
+  `CADES_DETACHED_CONTENT_MISMATCH` döner.
+
+Sonraki server-side ve client-side adımlar ilk imza akışıyla aynıdır. Manifest, yeni
+imzalayanın sertifikasına ve yeni hazırlanmış digest'e bağlanır. Özel anahtar sınırı ve
+temel akışın PIN davranışı korunur. 18 Ağustos 2026 güncel temel akışında server-side
+SMART_CARD istek PIN'i opsiyoneldir; PIN yoksa güvenli profil credential'ı veya token
+oturumu denenir ve giriş gereksinimi `SERVER_SMART_CARD_LOGIN_REQUIRED` olarak bildirilir.
+Bu davranış SINGLE, PARALLEL ve SERIAL için aynıdır. Client-side PIN yalnız Smart Card
+Agent Swing penceresinde alınır; HSM yalnız `credentialRef` kullanır.
+
+ATTACHED/DETACHED ile PARALLEL/SERIAL kombinasyonlarının eksiksiz REST gövdeleri ve
+doğrudan Java/JAR kodları [COKLU_IMZA_ORNEKLERI.md](COKLU_IMZA_ORNEKLERI.md) içinde
+verilmiştir. Örneklerde ATTACHED akış dış belge almadan, DETACHED akış ise imza ilişkisinden
+bağımsız olarak orijinal belgeyi doğrulayarak ilerler.
 
 ## Adım adım çoklu imza
 
-1. Önceki artifact ve gerekiyorsa orijinal belge okunur.
+1. Önceki artifact okunur; CAdES DETACHED ise imza tipi ne olursa olsun orijinal belge de alınır.
 2. İstek `PARALLEL` veya `SERIAL` ile oluşturulur.
 3. API format/paketleme kombinasyonunu ve önceki artifact'i doğrular.
 4. Format modülü yeni SignerInfo, CounterSignature veya PDF revision hazırlığını
@@ -50,7 +69,9 @@ anahtar davranışı değişmez.
 ## Kütüphane API'leri
 
 - `CadesSignatureService.prepareParallel(...)`
+- `CadesSignatureService.extractAttachedContent(...)`
 - `CadesSignatureService.prepareParallelDigest(...)`
+- `CadesSignatureService.validateDetachedContent(...)`
 - `CadesSignatureService.prepareCounterSignature(...)`
 - `XadesSignatureService.prepareParallel(...)`
 - `XadesSignatureService.prepareCounterSignature(...)`
@@ -74,9 +95,10 @@ Mevcut istemciler yeni alanları göndermediğinde tek imza davranışı değiş
 
 Ayrı sayfa: `http://localhost:8080/multi-signature/`
 
-Sayfada önceki imzalı dosya, gerekiyorsa orijinal belge, format, paketleme,
-PARALLEL/SERIAL tipi, hedef indeks, algoritma, server/client modu ve sertifika
-seçilir. Client-side PIN yalnız Smart Card Agent penceresinde alınır.
+Sayfada önceki imzalı dosya, format, paketleme, PARALLEL/SERIAL tipi, hedef indeks,
+algoritma, server/client modu ve sertifika seçilir. CAdES ATTACHED seçiminde orijinal
+belge alanı devre dışıdır; CAdES DETACHED seçiminde PARALLEL/SERIAL ayrımı olmadan
+zorunludur. Client-side PIN yalnız Smart Card Agent penceresinde alınır.
 
 ## Test ve kabul
 
@@ -84,6 +106,9 @@ seçilir. Client-side PIN yalnız Smart Card Agent penceresinde alınır.
   kriptografik olarak doğrular.
 - XAdES testi iki paralel Signature ve bir nested CounterSignature üretip tümünü
   XMLDSig doğrulayıcıyla doğrular.
+- CAdES paketleme matrisi testi ATTACHED PARALLEL/SERIAL akışını dış belge olmadan;
+  DETACHED PARALLEL/SERIAL akışını yalnız orijinal belgeyle kabul eder ve kararlı hata
+  kodlarını denetler.
 - PAdES testi iki incremental signature dictionary üretip iki CMS imzasını da
   doğrular.
 - Tam Maven reactor testi ve fiziksel kart kabul testi ayrıca çalıştırılır.

@@ -131,3 +131,38 @@ Faz 4'ün saha kabulü için her desteklenen kombinasyonda şu bilgiler sağlanm
 5. Üretilen imzanın bağımsız araçla doğrulama sonucu.
 
 Bu test tamamlanmadan kart profili üretim allowlist'ine alınmamalıdır.
+
+## 8. 6 Ağustos 2026 client kimliği ve fiziksel kart düzeltmesi
+
+### Kök neden
+
+- Agent cihaz UUID/Ed25519 anahtarı verilmediğinde `/agent/v1/device` değeri
+  `UNCONFIGURED` oluyordu.
+- Demo başarısız cihaz kaydından önce bu değeri forma yazdığı için
+  `POST /api/v1/signing-sessions` isteği UUID alanında genel `400` ile reddediliyordu.
+- API manifest public key'i verilmeden doğrudan agent JAR'ı başlatıldığında manifest
+  doğrulaması güvenli biçimde kapalı kalıyordu.
+
+### Uygulanan davranış
+
+1. Local agent ilk çalıştırmada benzersiz UUID + Ed25519 anahtarı üretir ve
+   `.eimza/agent-device-identity.properties` içinde yeniden kullanılabilir biçimde saklar.
+2. Manifest doğrulayıcı, manifestteki cihazı bu gerçek runtime kimliğiyle karşılaştırır.
+3. Aynı tenant + UUID + public key kaydı idempotenttir; başka tenant veya farklı public key
+   güvenlik hatası üretmeye devam eder.
+4. İlk ve çoklu imza demoları kart taramasında agent kimliğini otomatik kaydeder.
+5. Local başlangıç yardımcısı `scripts/start-local-agent.ps1`, API manifest public key'ini
+   alır ve yalnız agent sürecine verir. PIN hiçbir dosya/HTTP başlatma parametresine yazılmaz.
+6. JSON UUID/enum dönüşüm hataları `REQUEST_BODY_INVALID` Problem Details ile açıklanır.
+
+### 6 Ağustos 2026 runtime kanıtı
+
+- Agent kimliği: geçerli UUID, `LOCAL_FILE` kalıcılığı; iki kayıt isteği de `201`.
+- Takılı AKİS kart: ATR `3B9F978131FE4580655443D3228231C073F621808105D3`, durum `READY`.
+- Public RSA sertifikası PIN'siz okundu; karttaki private key ilişkisi bulundu.
+- Süresi dolmuş sertifika için tarih kontrolü yalnız local `CUSTOM` politikada pasifleştirildi.
+- PIN görünür Swing penceresinde alındı; client-side CAdES B-B artifact'i API tarafından
+  tamamlandı ve kart/cihaz imzaları doğrulandı.
+
+Bu, süresi dolmuş geliştirici sertifikasıyla kriptografik kart kabul kanıtıdır; geçerli NES,
+üretim veya hukuki kabul değildir.

@@ -31,7 +31,7 @@ class ManifestVerifierTest {
         properties.setDeviceId("cihaz-1");
         properties.setManifestPublicKey(Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded()));
         verifier = new ManifestVerifier(
-                objectMapper, properties, Clock.fixed(NOW, ZoneOffset.UTC));
+                objectMapper, properties, "cihaz-1", Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     @Test

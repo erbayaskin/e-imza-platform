@@ -1,6 +1,7 @@
 package io.github.erbayaskin.eimza.api.clientdevice;
 
 import java.security.KeyFactory;
+import java.security.MessageDigest;
 import java.security.spec.X509EncodedKeySpec;
 import java.time.Clock;
 import java.util.Base64;
@@ -22,14 +23,26 @@ public class ClientDeviceService {
 
     @Transactional
     public ClientDeviceResponse register(UUID tenantId, RegisterClientDeviceRequest request) {
-        if (repository.existsById(request.deviceId())) {
-            throw new ApiException(
-                    HttpStatus.CONFLICT,
-                    "CLIENT_DEVICE_ALREADY_REGISTERED",
-                    "Client cihazı zaten kayıtlı.",
-                    false);
-        }
         var encoded = decodePublicKey(request.publicKey());
+        var existing = repository.findById(request.deviceId());
+        if (existing.isPresent()) {
+            var value = existing.get();
+            if (!value.tenantId().equals(tenantId)) {
+                throw new ApiException(
+                        HttpStatus.FORBIDDEN,
+                        "CLIENT_DEVICE_FORBIDDEN",
+                        "Client cihazı başka bir tenant adına kayıtlı.",
+                        false);
+            }
+            if (!MessageDigest.isEqual(value.publicKey(), encoded)) {
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
+                        "CLIENT_DEVICE_KEY_MISMATCH",
+                        "Client cihaz UUID'si farklı bir açık anahtarla kayıtlı.",
+                        false);
+            }
+            return ClientDeviceResponse.from(value);
+        }
         var value = repository.save(ClientDeviceEntity.create(
                 request.deviceId(), tenantId, request.displayName(), encoded, clock.instant()));
         return ClientDeviceResponse.from(value);

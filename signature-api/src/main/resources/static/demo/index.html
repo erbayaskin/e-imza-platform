@@ -35,13 +35,15 @@
  <div id="serverIdentity" class="hidden">
   <label>Server-side anahtar profili</label><select id="serverKeyId"><option value="">Profilleri yükleyin</option></select>
   <button id="loadServerKeys">Server key profillerini yükle</button>
-  <label>Sunucu akıllı kart PIN'i</label><input id="serverPin" type="password" autocomplete="off" placeholder="HSM için boş bırakılır; akıllı kart için tek kullanımlıktır">
+  <div id="serverKeyStatus" class="status">Tenant için kullanılabilir profiller henüz yüklenmedi.</div>
+  <label>Sunucu akıllı kart PIN'i (opsiyonel)</label><input id="serverPin" type="password" autocomplete="off" placeholder="Boşsa token oturumu veya güvenli profil credential'ı denenir; HSM için boş bırakın">
  </div>
 </section>
 
 <section id="clientCardStep" class="step">
  <h2>2. Kart ve imza sertifikası</h2>
- <button id="discover">Kartı tara ve public sertifikaları yükle</button>
+ <div class="notice">Agent'ı local testte <code>.\scripts\start-local-agent.ps1</code> ile başlatın. Bu komut API manifest anahtarını güvenli biçimde agent sürecine verir.</div>
+ <button id="discover">Agent kimliğini kaydet, kartı tara ve public sertifikaları yükle</button>
  <label>Kart/okuyucu</label><select id="card" disabled><option>Önce kartı tara</option></select>
  <label>İmza sertifikası</label><select id="certificate" disabled><option>Önce sertifikaları yükle</option></select>
  <div id="pinStatus" class="status">Yerel PIN işlemi henüz başlatılmadı.</div>
@@ -67,8 +69,15 @@ const log=x=>document.querySelector('#log').textContent=typeof x==='string'?x:JS
 const pin=x=>document.querySelector('#pinStatus').textContent=x;
 const b64=bytes=>{let s=''; for(let i=0;i<bytes.length;i+=32768)s+=String.fromCharCode(...bytes.slice(i,i+32768));return btoa(s)};
 const b64url=bytes=>b64(bytes).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
-const headers=()=>({'Content-Type':'application/json','X-Tenant-Id':tenant.value});
-async function json(url,options={}){const r=await fetch(url,options);const x=await r.json();if(!r.ok)throw new Error(JSON.stringify(x));return x}
+const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const tenantId=()=>{const value=tenant.value.trim();if(!uuidPattern.test(value))throw new Error('Tenant UUID geçerli bir UUID olmalıdır.');return value};
+const headers=()=>({'Content-Type':'application/json','X-Tenant-Id':tenantId()});
+async function json(url,options={}){
+ const r=await fetch(url,options);const text=await r.text();let x=null;
+ if(text){try{x=JSON.parse(text)}catch{x={message:text}}}
+ if(!r.ok){const e=new Error(x?.detail||x?.message||`${r.status} ${r.statusText}`);e.payload=x;e.status=r.status;throw e}
+ return x;
+}
 const packagingByFormat={
  CADES:['DETACHED','ATTACHED'],
  XADES:['DETACHED','ENVELOPED','ENVELOPING'],
@@ -93,42 +102,57 @@ function updateAlgorithms(){
 }
 format.onchange=updatePackaging;
 certificate.onchange=updateAlgorithms;
+let serverProfiles=[];
 loadServerKeys.onclick=async()=>{
  try{
+  const currentTenant=tenantId();
   const profiles=await json(api+'/admin/server-key-profiles',{headers:headers()});
-  const enabled=profiles.filter(x=>x.enabled);
-  serverKeyId.innerHTML=enabled.map(x=>`<option value="${x.serverKeyId}">${x.displayName} — ${x.deviceType} — ${x.serverKeyId}</option>`).join('');
-  if(!enabled.length)serverKeyId.innerHTML='<option value="">Etkin profil yok; yönetim ekranından ekleyin</option>';
-  log(profiles);
- }catch(e){log(e.message)}
+  serverProfiles=profiles.filter(x=>x.enabled&&(!x.allowedTenantIds?.length||x.allowedTenantIds.includes(currentTenant)));
+  const blocked=profiles.filter(x=>x.enabled&&!serverProfiles.includes(x));
+  serverKeyId.innerHTML=serverProfiles.map(x=>`<option value="${x.serverKeyId}">${x.displayName} — ${x.deviceType} — ${x.serverKeyId}</option>`).join('');
+  if(!serverProfiles.length)serverKeyId.innerHTML='<option value="">Bu tenant için etkin profil yok; yönetim ekranındaki izinli tenant listesini düzeltin</option>';
+  serverKeyStatus.textContent=serverProfiles.length
+   ? `${serverProfiles.length} kullanılabilir profil yüklendi.${blocked.length?` ${blocked.length} profil tenant yetkisi nedeniyle gizlendi.`:''}`
+   : `Tenant ${currentTenant} için kullanılabilir server key yok.`;
+  if(mode.value==='SERVER_SIDE')sign.disabled=!serverKeyId.value;
+  log({tenantId:currentTenant,availableProfiles:serverProfiles,blockedProfileCount:blocked.length});
+ }catch(e){serverKeyStatus.textContent=e.message;log(e.payload||e.message)}
 };
+serverKeyId.onchange=()=>{if(mode.value==='SERVER_SIDE')sign.disabled=!serverKeyId.value};
+tenant.onchange=()=>{if(mode.value==='SERVER_SIDE')loadServerKeys.click()};
 mode.onchange=()=>{
  const client=mode.value==='CLIENT_SIDE';
  clientIdentity.classList.toggle('hidden',!client);
  serverIdentity.classList.toggle('hidden',client);
  clientCardStep.classList.toggle('hidden',!client);
- sign.disabled=client?!certificate._items?.length:false;
+ sign.disabled=client?!certificate._items?.length:!serverKeyId.value;
  sign.textContent=client
   ? 'Seçili sertifika ile imzala (PIN penceresi açılır)'
   : 'Sunucudaki kart / HSM ile imzala';
  if(!client)loadServerKeys.click();
  updateAlgorithms();
 };
+async function ensureClientDevice(){
+ const identity=await json(agent+'/device');
+ if(!uuidPattern.test(identity?.deviceId||'')){
+  throw new Error('Agent geçerli cihaz UUID’si üretmedi. Güncel agent paketini scripts/start-local-agent.ps1 ile başlatın.');
+ }
+ const registered=await json(api+'/admin/client-devices',{method:'POST',headers:headers(),body:JSON.stringify({
+  deviceId:identity.deviceId,displayName:'Yerel demo ajanı',publicKey:identity.publicKey
+ })});
+ device.value=identity.deviceId;
+ return {identity,registered};
+}
 registerDevice.onclick=async()=>{
- try{
-  registerDevice.disabled=true;
-  const identity=await json(agent+'/device');
-  device.value=identity.deviceId;
-  const registered=await json(api+'/admin/client-devices',{method:'POST',headers:headers(),body:JSON.stringify({
-   deviceId:identity.deviceId,displayName:'Yerel demo ajanı',publicKey:identity.publicKey
-  })});
-  log({deviceIdentity:identity,registered});
- }catch(e){log(e.message)}
+ try{registerDevice.disabled=true;log(await ensureClientDevice())}
+ catch(e){log(e.payload||e.message)}
  finally{registerDevice.disabled=false}
 };
 discover.onclick=async()=>{
   try{
     discover.disabled=true;sign.disabled=true;card.disabled=true;certificate.disabled=true;
+    pin('Agent kimliği tenant için kaydediliyor; ardından kart aranacak.');
+    const registration=await ensureClientDevice();
     pin('Kart aranıyor. Public sertifikalar PIN kullanılmadan okunuyor.');
     const cards=await json(agent+'/cards');
     card.innerHTML=cards.filter(x=>x.status==='READY').map(x=>`<option value="${x.readerId}">${x.profileName} — ${x.readerId}</option>`).join('');
@@ -141,18 +165,20 @@ discover.onclick=async()=>{
     certificate.disabled=false;sign.disabled=false;
     updateAlgorithms();
     pin('Public imza sertifikaları PIN kullanılmadan yüklendi. İmzalama sırasında PIN bir kez istenir.');
-    log({cards,certificates:certificate._items});
-  }catch(e){pin('Kart veya public sertifika okuma işlemi tamamlanamadı. Ayrıntı işlem sonucunda.');log(e.message)}
+    log({registration,cards,certificates:certificate._items});
+  }catch(e){pin('Kart veya public sertifika okuma işlemi tamamlanamadı. Ayrıntı işlem sonucunda.');log(e.payload||e.message)}
   finally{discover.disabled=false}
 };
 sign.onclick=async()=>{
  try{
   sign.disabled=true;
   const client=mode.value==='CLIENT_SIDE';
+  if(client)await ensureClientDevice();
   const f=file.files[0], cert=certificate._items?.[Number(certificate.value)];
   if(!f)throw new Error('Dosya seçilmelidir.');
   if(client&&(!cert||!card.value))throw new Error('Client-side için kart ve sertifika seçilmelidir.');
-  if(!client&&!serverKeyId.value)throw new Error('Server-side için serverKeyId zorunludur.');
+  if(!client&&!serverKeyId.value)throw new Error('Server-side için bu tenant’a izinli serverKeyId zorunludur.');
+  if(!client&&!serverProfiles.some(x=>x.serverKeyId===serverKeyId.value))throw new Error('Seçilen server key bu tenant için kullanılamaz; profilleri yeniden yükleyin.');
   if(format.value==='PADES'&&f.type!=='application/pdf')throw new Error('PAdES için PDF seçilmelidir.');
   pin(client?'İmzalama için yerel PIN penceresini takip edin. PIN bu sayfaya aktarılmaz.':'Server-side imzalama sunucuda yürütülüyor.');
   const bytes=new Uint8Array(await f.arrayBuffer());
@@ -184,8 +210,8 @@ sign.onclick=async()=>{
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=f.name+(format.value==='PADES'?'.signed.pdf':format.value==='XADES'?'.xades.xml':'.p7s');a.click();
   pin('İmzalama tamamlandı. Çıktı dosyası indirildi.');
   log({sessionId:session.sessionId,artifactId:artifact.artifactId,sha256:artifact.sha256});
- }catch(e){pin('İmzalama tamamlanamadı. Ayrıntı işlem sonucunda.');log(e.message)}
- finally{sign.disabled=mode.value==='CLIENT_SIDE'?!certificate._items?.length:false}
+ }catch(e){pin('İmzalama tamamlanamadı. Ayrıntı işlem sonucunda.');log(e.payload||e.message)}
+ finally{sign.disabled=mode.value==='CLIENT_SIDE'?!certificate._items?.length:!serverKeyId.value}
 };
 
 updatePackaging();
